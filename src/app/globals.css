@@ -1,0 +1,156 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+:root {
+  --radius: 1rem;
+  /* Singapore Airlines inspired color palette */
+  --background: oklch(0.96 0 0); /* Light gray background */
+  --foreground: oklch(0.2 0 0); /* Dark text */
+  --card: oklch(1 0 0); /* Pure white cards */
+  --card-foreground: oklch(0.2 0 0); /* Dark text on cards */
+  --popover: oklch(1 0 0); /* Pure white */
+  --popover-foreground: oklch(0.2 0 0); /* Dark text */
+  /* Primary: Deep blue inspired by Singapore Airlines */
+  --primary: oklch(0.35 0.12 250); /* Deep blue #003D7A */
+  --primary-foreground: oklch(1 0 0); /* White text */
+  /* Secondary: Lighter blue */
+  --secondary: oklch(0.92 0.01 220); /* Very light blue-gray */
+  --secondary-foreground: oklch(0.3 0 0); /* Dark text */
+  --muted: oklch(0.94 0 0); /* Light gray */
+  --muted-foreground: oklch(0.5 0 0); /* Medium gray text */
+  /* Accent: Teal/turquoise accent */
+  --accent: oklch(0.45 0.1 240); /* Medium blue */
+  --accent-foreground: oklch(1 0 0); /* White text */
+  --destructive: oklch(0.55 0.2 25); /* Red for errors */
+  --border: oklch(0.9 0 0); /* Light gray borders */
+  --input: oklch(0.98 0 0); /* Very light gray inputs */
+  --ring: oklch(0.35 0.12 250); /* Deep blue focus ring */
+  --chart-1: oklch(0.35 0.12 250); /* Deep blue */
+  --chart-2: oklch(0.45 0.1 240); /* Medium blue */
+  --chart-3: oklch(0.55 0.08 230); /* Light blue */
+  --chart-4: oklch(0.65 0.05 220); /* Very light blue */
+  --chart-5: oklch(0.75 0.03 210); /* Pale blue */
+  --sidebar: oklch(0.98 0 0); /* Very light gray */
+  --sidebar-foreground: oklch(0.2 0 0); /* Dark text */
+  --sidebar-primary: oklch(0.35 0.12 250); /* Deep blue */
+  --sidebar-primary-foreground: oklch(1 0 0); /* White text */
+  --sidebar-accent: oklch(0.92 0.01 220); /* Light blue-gray */
+  --sidebar-accent-foreground: oklch(0.3 0 0); /* Dark text */
+  --sidebar-border: oklch(0.9 0 0); /* Light gray */
+  --sidebar-ring: oklch(0.35 0.12 250); /* Deep blue */
+}
+
+.dark {
+  /* Dark mode: Deep blue theme */
+  --background: oklch(0.15 0.05 250); /* Very dark blue */
+  --foreground: oklch(0.95 0 0); /* Near white */
+  --card: oklch(0.22 0.06 250); /* Dark blue card */
+  --card-foreground: oklch(0.95 0 0); /* Near white */
+  --popover: oklch(0.22 0.06 250); /* Dark blue */
+  --popover-foreground: oklch(0.95 0 0); /* Near white */
+  --primary: oklch(0.55 0.15 240); /* Bright blue */
+  --primary-foreground: oklch(1 0 0); /* White */
+  --secondary: oklch(0.28 0.05 245); /* Medium dark blue */
+  --secondary-foreground: oklch(0.9 0 0); /* Near white */
+  --muted: oklch(0.25 0.04 248); /* Muted dark blue */
+  --muted-foreground: oklch(0.65 0 0); /* Medium gray */
+  --accent: oklch(0.5 0.12 235); /* Accent blue */
+  --accent-foreground: oklch(1 0 0); /* White */
+  --destructive: oklch(0.55 0.2 25); /* Red */
+  --border: oklch(1 0 0 / 10%); /* White with opacity */
+  --input: oklch(1 0 0 / 12%); /* White with opacity */
+  --ring: oklch(0.55 0.15 240); /* Bright blue */
+  --chart-1: oklch(0.55 0.15 240); /* Bright blue */
+  --chart-2: oklch(0.5 0.12 235); /* Medium blue */
+  --chart-3: oklch(0.45 0.1 230); /* Light blue */
+  --chart-4: oklch(0.4 0.08 225); /* Pale blue */
+  --chart-5: oklch(0.35 0.06 220); /* Very pale blue */
+  --sidebar: oklch(0.18 0.05 252); /* Very dark blue */
+  --sidebar-foreground: oklch(0.95 0 0); /* Near white */
+  --sidebar-primary: oklch(0.55 0.15 240); /* Bright blue */
+  --sidebar-primary-foreground: oklch(1 0 0); /* White */
+  --sidebar-accent: oklch(0.28 0.05 245); /* Medium dark blue */
+  --sidebar-accent-foreground: oklch(0.9 0 0); /* Near white */
+  --sidebar-border: oklch(1 0 0 / 10%); /* White with opacity */
+  --sidebar-ring: oklch(0.55 0.15 240); /* Bright blue */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Singapore Airlines inspired gradient background */
+  .gradient-blue-bg {
+    background: linear-gradient(180deg, oklch(0.35 0.12 250) 0%, oklch(0.42 0.1 245) 100%);
+  }
+
+  /* Card with elevation */
+  .card-elevated {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Pill button style */
+  .btn-pill {
+    border-radius: 9999px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+  }
+
+  /* Input with border */
+  .input-bordered {
+    border: 1px solid oklch(0.9 0 0);
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem;
+  }
+}
