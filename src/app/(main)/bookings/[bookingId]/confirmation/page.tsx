@@ -1,0 +1,392 @@
+import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
+import { format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { prisma } from "@/lib/prisma";
+import { getUser } from "@/lib/supabase/server";
+import { getPaymentStatus } from "@/lib/hitpay/client";
+import { sendBookingConfirmationEmail } from "@/lib/email/send";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle, Calendar, Clock, MapPin, XCircle, AlertCircle } from "lucide-react";
+import { ConfirmationClient } from "./confirmation-client";
+
+const TIMEZONE = "Asia/Singapore";
+
+type BookingType = "COURT_BOOKING" | "CORPORATE_BOOKING" | "PRIVATE_COACHING";
+
+const typeConfig: Record<BookingType, string> = {
+  COURT_BOOKING: "Court Booking",
+  CORPORATE_BOOKING: "Corporate Booking",
+  PRIVATE_COACHING: "Private Coaching",
+};
+
+interface ConfirmationPageProps {
+  params: Promise<{ bookingId: string }>;
+  searchParams: Promise<{ status?: string }>;
+}
+
+export default async function ConfirmationPage({
+  params,
+  searchParams,
+}: ConfirmationPageProps) {
+  const { bookingId } = await params;
+  const { status: queryStatus } = await searchParams;
+
+  const user = await getUser();
+  if (!user) {
+    redirect("/login");
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseId: user.id },
+  });
+
+  if (!dbUser) {
+    redirect("/login");
+  }
+
+  let booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      payment: true,
+      slots: {
+        include: { court: true },
+        orderBy: { startTime: "asc" },
+      },
+    },
+  });
+
+  if (!booking) {
+    notFound();
+  }
+
+  // Check ownership
+  if (booking.userId !== dbUser.id && dbUser.role !== "ADMIN") {
+    notFound();
+  }
+
+  // If still pending and we have a HitPay payment ID, check the payment status
+  // This handles the case when webhooks aren't available (localhost dev)
+  if (
+    booking.status === "PENDING_PAYMENT" &&
+    booking.payment?.hitpayPaymentId
+  ) {
+    try {
+      const hitpayStatus = await getPaymentStatus(booking.payment.hitpayPaymentId);
+
+      // Check if any payment is completed or failed
+      const completedPayment = hitpayStatus.payments?.find(
+        (p) => p.status === "completed"
+      );
+      const failedPayment = hitpayStatus.payments?.find(
+        (p) => p.status === "failed"
+      );
+
+      if (hitpayStatus.status === "completed" || completedPayment) {
+        // Update our database to reflect the payment
+        await prisma.$transaction([
+          prisma.booking.update({
+            where: { id: bookingId },
+            data: {
+              status: "CONFIRMED",
+              expiresAt: null,
+            },
+          }),
+          prisma.payment.update({
+            where: { id: booking.payment.id },
+            data: {
+              status: "COMPLETED",
+              method: "PAYNOW",
+              paidAt: new Date(),
+            },
+          }),
+        ]);
+
+        // Refresh booking data
+        booking = await prisma.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            payment: true,
+            slots: {
+              include: { court: true },
+              orderBy: { startTime: "asc" },
+            },
+          },
+        });
+
+        if (!booking) {
+          notFound();
+        }
+
+        // Send confirmation email (for localhost dev where webhooks don't work)
+        const firstSlot = booking.slots[0];
+        if (firstSlot) {
+          await sendBookingConfirmationEmail({
+            userEmail: dbUser.email,
+            userName: dbUser.name || "Guest",
+            courtName:
+              booking.slots.length > 1
+                ? `${booking.slots.length} slots`
+                : firstSlot.court.name,
+            startTime: firstSlot.startTime,
+            endTime: firstSlot.endTime,
+            totalCents: booking.totalCents,
+            currency: booking.currency,
+            bookingId: booking.id,
+          });
+        }
+      } else if (hitpayStatus.status === "failed" || failedPayment) {
+        // Update payment status to FAILED
+        await prisma.payment.update({
+          where: { id: booking.payment.id },
+          data: {
+            status: "FAILED",
+          },
+        });
+
+        // Refresh booking data to reflect the failed payment
+        booking = await prisma.booking.findUnique({
+          where: { id: bookingId },
+          include: {
+            payment: true,
+            slots: {
+              include: { court: true },
+              orderBy: { startTime: "asc" },
+            },
+          },
+        });
+
+        if (!booking) {
+          notFound();
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check HitPay status:", error);
+      // Continue with current status
+    }
+  }
+
+  // TypeScript can't track that booking is non-null after notFound() inside nested if
+  if (!booking) {
+    notFound();
+  }
+
+  const firstSlot = booking.slots[0];
+  const startTimeSGT = firstSlot
+    ? toZonedTime(firstSlot.startTime, TIMEZONE)
+    : new Date();
+  const totalDollars = (booking.totalCents / 100).toFixed(2);
+  const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
+
+  // Determine status display
+  const isConfirmed = booking.status === "CONFIRMED";
+  const isPending = booking.status === "PENDING_PAYMENT";
+  const isFailed = queryStatus === "failed" || booking.payment?.status === "FAILED";
+  const isExpired = booking.status === "EXPIRED";
+  const isCancelled = booking.status === "CANCELLED";
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Auto-refresh component when payment is pending */}
+      <ConfirmationClient isPending={isPending} isFailed={isFailed} bookingId={bookingId} />
+
+      {/* Header Section with conditional gradient */}
+      {isConfirmed && (
+        <div className="gradient-blue-bg text-white px-4 sm:px-6 lg:px-8 pt-8 pb-12">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <CheckCircle className="h-12 w-12 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold mb-2">Booking Confirmed!</h1>
+            <p className="text-white/90 text-base">
+              Your court has been reserved. A confirmation email has been sent.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className={`max-w-2xl mx-auto px-4 ${isConfirmed ? '-mt-6' : 'py-8'}`}>
+        <Card className={`card-elevated border-0 rounded-2xl ${!isConfirmed ? 'mt-8' : ''}`}>
+          {!isConfirmed && (
+            <CardHeader className="text-center pb-6">
+              {isPending ? (
+                <>
+                  <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-amber-50 flex items-center justify-center">
+                    <AlertCircle className="h-12 w-12 text-amber-500 animate-pulse" />
+                  </div>
+                  <CardTitle className="text-2xl text-amber-600 font-bold">
+                    Checking Payment Status...
+                  </CardTitle>
+                  <CardDescription className="text-base mt-2">
+                    We're verifying your payment with HitPay. This usually takes a few moments.
+                  </CardDescription>
+                </>
+              ) : isFailed ? (
+                <>
+                  <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-red-50 flex items-center justify-center">
+                    <XCircle className="h-12 w-12 text-red-500" />
+                  </div>
+                  <CardTitle className="text-2xl text-red-600 font-bold">
+                    Payment Failed
+                  </CardTitle>
+                  <CardDescription className="text-base mt-2">
+                    Your payment could not be processed. Please try again.
+                  </CardDescription>
+                </>
+              ) : isExpired ? (
+                <>
+                  <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-secondary flex items-center justify-center">
+                    <Clock className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <CardTitle className="text-2xl text-muted-foreground font-bold">
+                    Booking Expired
+                  </CardTitle>
+                  <CardDescription className="text-base mt-2">
+                    This booking has expired due to non-payment.
+                  </CardDescription>
+                </>
+              ) : isCancelled ? (
+                <>
+                  <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-secondary flex items-center justify-center">
+                    <XCircle className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <CardTitle className="text-2xl text-muted-foreground font-bold">
+                    Booking Cancelled
+                  </CardTitle>
+                  <CardDescription className="text-base mt-2">
+                    This booking has been cancelled.
+                  </CardDescription>
+                </>
+              ) : null}
+            </CardHeader>
+          )}
+
+        <CardContent className="space-y-6 pt-6">
+          {/* Booking Details */}
+          <div className="bg-secondary/50 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-base">Booking Details</h3>
+              <div className="flex gap-2">
+                <Badge variant="outline" className="rounded-full">{bookingTypeLabel}</Badge>
+                <Badge
+                  className={`rounded-full ${
+                    isConfirmed
+                      ? "bg-primary text-primary-foreground"
+                      : isPending
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {booking.status.replace("_", " ")}
+                </Badge>
+              </div>
+            </div>
+
+            {firstSlot && (
+              <div className="pb-3 border-b border-border/50">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground font-medium">Date:</span>
+                </div>
+                <p className="font-semibold ml-6 text-base">
+                  {format(startTimeSGT, "EEEE, d MMMM yyyy")}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground font-medium">Time Slots:</span>
+              </div>
+              {booking.slots.map((slot) => {
+                const slotStartSGT = toZonedTime(slot.startTime, TIMEZONE);
+                const slotEndSGT = toZonedTime(slot.endTime, TIMEZONE);
+                return (
+                  <div key={slot.id} className="flex items-center gap-2 text-sm ml-6 bg-white rounded-lg p-3">
+                    <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span className="font-semibold">{slot.court.name}</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">
+                      {format(slotStartSGT, "h:mm a")} - {format(slotEndSGT, "h:mm a")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-border/50 pt-4 flex justify-between items-center">
+              <span className="text-muted-foreground font-medium">Total Paid:</span>
+              <span className="text-2xl font-bold text-primary">
+                ${totalDollars} {booking.currency}
+              </span>
+            </div>
+
+            {booking.payment?.hitpayReferenceNo && (
+              <div className="text-sm text-muted-foreground">
+                Reference: <span className="font-medium">{booking.payment.hitpayReferenceNo}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            {isConfirmed && (
+              <>
+                <Button asChild className="flex-1 rounded-full h-12 font-semibold shadow-sm">
+                  <Link href="/bookings">View My Bookings</Link>
+                </Button>
+                <Button asChild variant="outline" className="flex-1 rounded-full h-12 font-medium border-border/60">
+                  <Link href="/courts">Book Another Court</Link>
+                </Button>
+              </>
+            )}
+
+            {isPending && (
+              <>
+                <Button asChild className="flex-1 rounded-full h-12 font-semibold shadow-sm">
+                  <Link href={`/bookings/${bookingId}/pay`}>
+                    Complete Payment
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="flex-1 rounded-full h-12 font-medium border-border/60">
+                  <Link href="/courts">Cancel & Browse Courts</Link>
+                </Button>
+              </>
+            )}
+
+            {isFailed && (
+              <>
+                <Button asChild className="flex-1 rounded-full h-12 font-semibold shadow-sm">
+                  <Link href={`/bookings/${bookingId}/pay`}>Try Again</Link>
+                </Button>
+                <Button asChild variant="outline" className="flex-1 rounded-full h-12 font-medium border-border/60">
+                  <Link href="/courts">Browse Courts</Link>
+                </Button>
+              </>
+            )}
+
+            {(isExpired || isCancelled) && (
+              <Button asChild className="flex-1 rounded-full h-12 font-semibold shadow-sm">
+                <Link href="/courts">Browse Available Courts</Link>
+              </Button>
+            )}
+          </div>
+
+          {/* Confirmation ID */}
+          {isConfirmed && (
+            <div className="text-center text-sm text-muted-foreground bg-secondary/30 rounded-lg p-4">
+              <p className="font-medium">Booking ID: <span className="font-mono">{booking.id}</span></p>
+              <p className="mt-1 text-xs">
+                Please save this for your records.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      </div>
+    </div>
+  );
+}
