@@ -1,0 +1,5 @@
+-- CreateEnum
+CREATE TYPE "BookingType" AS ENUM ('COURT_BOOKING', 'CORPORATE_BOOKING', 'PRIVATE_COACHING');
+
+-- AlterTable
+ALTER TABLE "bookings" ADD COLUMN     "type" "BookingType" NOT NULL DEFAULT 'COURT_BOOKING';

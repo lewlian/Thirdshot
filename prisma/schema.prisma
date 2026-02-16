@@ -1,0 +1,327 @@
+// Prisma schema for PickleSG - Pickleball Facility Booking PWA
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  COMPLETED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  PAYNOW
+  CARD
+  SAVED_CARD
+  APPLE_PAY
+  GOOGLE_PAY
+  GRABPAY
+  ADMIN_OVERRIDE
+}
+
+enum BlockReason {
+  MAINTENANCE
+  TOURNAMENT
+  PRIVATE_EVENT
+  OTHER
+}
+
+enum BookingType {
+  COURT_BOOKING
+  CORPORATE_BOOKING
+  PRIVATE_COACHING
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  phone     String?
+  role      UserRole @default(USER)
+
+  // Supabase Auth integration
+  supabaseId String @unique @map("supabase_id")
+
+  // Timestamps
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  // Relations
+  bookings           Booking[]
+  payments           Payment[]
+  adminActions       AdminAuditLog[] @relation("AdminActions")
+  savedPaymentMethod SavedPaymentMethod?
+
+  @@map("users")
+}
+
+model Court {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Court configuration
+  isIndoor    Boolean @default(false) @map("is_indoor")
+  hasLighting Boolean @default(true) @map("has_lighting")
+  surfaceType String? @map("surface_type")
+
+  // Pricing (in cents to avoid floating point issues)
+  pricePerHourCents     Int  @map("price_per_hour_cents")
+  peakPricePerHourCents Int? @map("peak_price_per_hour_cents")
+
+  // Operating hours (stored as "HH:MM" in SGT)
+  openTime  String @default("07:00") @map("open_time")
+  closeTime String @default("22:00") @map("close_time")
+
+  // Slot configuration
+  slotDurationMinutes Int @default(60) @map("slot_duration_minutes")
+
+  // Status
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  blocks       CourtBlock[]
+  bookingSlots BookingSlot[]
+
+  @@map("courts")
+}
+
+model Booking {
+  id String @id @default(cuid())
+
+  // Booking session details
+  userId String      @map("user_id")
+  type   BookingType @default(COURT_BOOKING)
+
+  // Total pricing for all slots in this booking
+  totalCents Int    @map("total_cents")
+  currency   String @default("SGD")
+
+  // State machine
+  status BookingStatus @default(PENDING_PAYMENT)
+
+  // Payment timeout tracking
+  expiresAt DateTime? @map("expires_at")
+
+  // Admin override flag
+  isAdminOverride Boolean @default(false) @map("is_admin_override")
+  adminNotes      String? @map("admin_notes")
+
+  // Cancellation tracking
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason")
+
+  // Reminder tracking
+  reminderSentAt DateTime? @map("reminder_sent_at")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User          @relation(fields: [userId], references: [id])
+  payment Payment?
+  slots   BookingSlot[]
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+  @@map("bookings")
+}
+
+model BookingSlot {
+  id String @id @default(cuid())
+
+  // Parent booking
+  bookingId String @map("booking_id")
+
+  // Slot details
+  courtId   String   @map("court_id")
+  startTime DateTime @map("start_time")
+  endTime   DateTime @map("end_time")
+
+  // Pricing for this individual slot
+  priceInCents Int @map("price_in_cents")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  court   Court   @relation(fields: [courtId], references: [id])
+
+  // Composite unique constraint to prevent double bookings
+  @@unique([courtId, startTime], name: "unique_court_slot")
+  @@index([bookingId])
+  @@index([courtId, startTime, endTime])
+  @@map("booking_slots")
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  // Relations
+  bookingId String @unique @map("booking_id")
+  userId    String @map("user_id")
+
+  // HitPay integration
+  hitpayPaymentId   String? @unique @map("hitpay_payment_id")
+  hitpayPaymentUrl  String? @map("hitpay_payment_url")
+  hitpayReferenceNo String? @map("hitpay_reference_no")
+
+  // Payment details
+  amountCents Int            @map("amount_cents")
+  currency    String         @default("SGD")
+  method      PaymentMethod?
+  status      PaymentStatus  @default(PENDING)
+
+  // PayNow specific
+  paynowQrData String? @map("paynow_qr_data")
+
+  // Webhook data storage
+  webhookPayload Json? @map("webhook_payload")
+
+  // Timestamps
+  paidAt    DateTime? @map("paid_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+model CourtBlock {
+  id String @id @default(cuid())
+
+  // Block details
+  courtId String @map("court_id")
+
+  // Block period
+  startTime DateTime @map("start_time")
+  endTime   DateTime @map("end_time")
+
+  // Block metadata
+  reason      BlockReason
+  description String?
+
+  // Created by admin
+  createdById String @map("created_by_id")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  court Court @relation(fields: [courtId], references: [id])
+
+  @@index([courtId, startTime, endTime])
+  @@map("court_blocks")
+}
+
+model AdminAuditLog {
+  id String @id @default(cuid())
+
+  // Who performed the action
+  adminId String @map("admin_id")
+
+  // What was done
+  action     String
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id")
+
+  // Change details
+  previousData Json?   @map("previous_data")
+  newData      Json?   @map("new_data")
+  notes        String?
+
+  // Request metadata
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  // Timestamp
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  admin User @relation("AdminActions", fields: [adminId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([adminId, createdAt])
+  @@map("admin_audit_logs")
+}
+
+model AppSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+// Saved payment method for one-click checkout
+// Each user can have one saved card (default payment method)
+model SavedPaymentMethod {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  // HitPay recurring billing reference
+  hitpayBillingId String @unique @map("hitpay_billing_id")
+
+  // Card display info (populated from HitPay webhook)
+  cardBrand       String? @map("card_brand") // "visa", "mastercard", "amex"
+  cardLast4       String? @map("card_last_4") // "4242"
+  cardExpiryMonth String? @map("card_expiry_month") // "12"
+  cardExpiryYear  String? @map("card_expiry_year") // "2027"
+
+  // Status tracking
+  isActive Boolean @default(true) @map("is_active")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("saved_payment_methods")
+}
