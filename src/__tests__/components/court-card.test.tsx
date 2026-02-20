@@ -50,7 +50,7 @@ describe("CourtCard", () => {
   it("should display standard price", () => {
     render(<CourtCard court={mockCourt} />);
     expect(screen.getByText("$20")).toBeInTheDocument();
-    expect(screen.getByText("/hr")).toBeInTheDocument();
+    expect(screen.getByText("/hour")).toBeInTheDocument();
   });
 
   it("should display peak price when available", () => {

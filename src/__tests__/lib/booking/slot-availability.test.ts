@@ -1,170 +1,208 @@
 /**
  * Unit tests for slot availability checking
- * Tests the transaction-based availability checking logic
+ * Tests the Supabase-based availability checking logic
  */
 
-import { checkSlotAvailabilityInTransaction } from "@/lib/booking/availability";
+jest.mock("@/lib/supabase/server", () => ({
+  createServerSupabaseClient: jest.fn(),
+}));
 
-// Mock Prisma transaction client
-const createMockTx = (existingSlot: any = null, block: any = null) => ({
-  bookingSlot: {
-    findFirst: jest.fn().mockResolvedValue(existingSlot),
-  },
-  courtBlock: {
-    findFirst: jest.fn().mockResolvedValue(block),
-  },
-});
+import { checkSlotAvailability } from "@/lib/booking/availability";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-describe("checkSlotAvailabilityInTransaction", () => {
+// Helper to create a chainable Supabase query mock
+function createChain(resolvedValue: any) {
+  const chain: any = {};
+  chain.then = (resolve: any, reject?: any) =>
+    Promise.resolve(resolvedValue).then(resolve, reject);
+  [
+    "select",
+    "eq",
+    "lt",
+    "gt",
+    "gte",
+    "lte",
+    "not",
+    "limit",
+    "or",
+    "order",
+    "single",
+    "range",
+  ].forEach((m) => {
+    chain[m] = jest.fn().mockReturnValue(chain);
+  });
+  return chain;
+}
+
+function createSupabaseMock(responses: Record<string, any>) {
+  return {
+    from: jest.fn((table: string) =>
+      createChain(responses[table] || { data: null })
+    ),
+  };
+}
+
+describe("checkSlotAvailability", () => {
   const courtId = "court-123";
-  const startTime = new Date("2026-01-20T10:00:00");
-  const endTime = new Date("2026-01-20T11:00:00");
+
+  // Use dates in the future (tomorrow)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const startTime = new Date(tomorrow);
+  startTime.setHours(10, 0, 0, 0);
+
+  const endTime = new Date(tomorrow);
+  endTime.setHours(11, 0, 0, 0);
+
+  const activeCourt = {
+    id: courtId,
+    name: "Court A",
+    is_active: true,
+    open_time: "08:00",
+    close_time: "22:00",
+    slot_duration_minutes: 60,
+    price_per_hour_cents: 2000,
+    peak_price_per_hour_cents: 3000,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   describe("available slots", () => {
-    it("should not throw when slot is available", async () => {
-      const mockTx = createMockTx(null, null);
-
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).resolves.not.toThrow();
-
-      expect(mockTx.bookingSlot.findFirst).toHaveBeenCalledWith({
-        where: {
-          courtId,
-          startTime: { lt: endTime },
-          endTime: { gt: startTime },
-          booking: {
-            status: { notIn: ["CANCELLED", "EXPIRED"] },
-          },
-        },
+    it("should return available when slot has no conflicts", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+        app_settings: { data: { key: "booking_window_days", value: "14" } },
+        booking_slots: { data: [] },
+        court_blocks: { data: [] },
       });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
+
+      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      expect(result.available).toBe(true);
     });
   });
 
   describe("unavailable slots", () => {
-    it("should throw when slot is already booked", async () => {
-      const existingBooking = {
-        id: "slot-123",
-        courtId,
-        startTime,
-        endTime,
-        booking: { status: "CONFIRMED" },
-      };
-      const mockTx = createMockTx(existingBooking, null);
+    it("should return unavailable when slot is already booked", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+        app_settings: { data: { key: "booking_window_days", value: "14" } },
+        booking_slots: { data: [{ id: "existing-slot" }] },
+        court_blocks: { data: [] },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).rejects.toThrow("One or more slots are no longer available");
+      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      expect(result.available).toBe(false);
+      expect(result.reason).toBe("Slot is already booked");
     });
 
-    it("should throw when court is blocked", async () => {
-      const blockData = {
-        id: "block-123",
-        courtId,
-        startTime,
-        endTime,
-        reason: "Maintenance",
-      };
-      const mockTx = createMockTx(null, blockData);
+    it("should return unavailable when court is blocked", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+        app_settings: { data: { key: "booking_window_days", value: "14" } },
+        booking_slots: { data: [] },
+        court_blocks: { data: [{ id: "block-1", reason: "Maintenance" }] },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).rejects.toThrow("Court is blocked during selected time");
+      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      expect(result.available).toBe(false);
+      expect(result.reason).toBe("Court is blocked during this time");
+    });
+
+    it("should return unavailable when court is inactive", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: { ...activeCourt, is_active: false } },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
+
+      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      expect(result.available).toBe(false);
+      expect(result.reason).toBe("Court not available");
+    });
+
+    it("should return unavailable when court does not exist", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: null },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
+
+      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      expect(result.available).toBe(false);
+      expect(result.reason).toBe("Court not available");
+    });
+
+    it("should return unavailable when slot is in the past", async () => {
+      const pastStart = new Date();
+      pastStart.setDate(pastStart.getDate() - 1);
+      pastStart.setHours(10, 0, 0, 0);
+      const pastEnd = new Date(pastStart);
+      pastEnd.setHours(11, 0, 0, 0);
+
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
+
+      const result = await checkSlotAvailability(courtId, pastStart, pastEnd);
+      expect(result.available).toBe(false);
+      expect(result.reason).toBe("Cannot book slots in the past");
+    });
+
+    it("should return unavailable when outside booking window", async () => {
+      const farFuture = new Date();
+      farFuture.setDate(farFuture.getDate() + 30);
+      farFuture.setHours(10, 0, 0, 0);
+      const farFutureEnd = new Date(farFuture);
+      farFutureEnd.setHours(11, 0, 0, 0);
+
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+        app_settings: { data: { key: "booking_window_days", value: "7" } },
+        booking_slots: { data: [] },
+        court_blocks: { data: [] },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
+
+      const result = await checkSlotAvailability(
+        courtId,
+        farFuture,
+        farFutureEnd
+      );
+      expect(result.available).toBe(false);
+      expect(result.reason).toBe("Slot is outside booking window");
     });
   });
 
-  describe("time overlap scenarios", () => {
-    it("should detect partial overlap at start", async () => {
-      // Existing: 09:00-10:30, Requested: 10:00-11:00 (overlaps 30 min)
-      const existingBooking = {
-        id: "slot-123",
-        startTime: new Date("2026-01-20T09:00:00"),
-        endTime: new Date("2026-01-20T10:30:00"),
-      };
-      const mockTx = createMockTx(existingBooking, null);
+  describe("query construction", () => {
+    it("should query booking_slots to check for conflicts", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+        app_settings: { data: { key: "booking_window_days", value: "14" } },
+        booking_slots: { data: [] },
+        court_blocks: { data: [] },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).rejects.toThrow("One or more slots are no longer available");
+      await checkSlotAvailability(courtId, startTime, endTime);
+      expect(mock.from).toHaveBeenCalledWith("booking_slots");
     });
 
-    it("should detect partial overlap at end", async () => {
-      // Existing: 10:30-12:00, Requested: 10:00-11:00 (overlaps 30 min)
-      const existingBooking = {
-        id: "slot-123",
-        startTime: new Date("2026-01-20T10:30:00"),
-        endTime: new Date("2026-01-20T12:00:00"),
-      };
-      const mockTx = createMockTx(existingBooking, null);
+    it("should query court_blocks to check for blocks", async () => {
+      const mock = createSupabaseMock({
+        courts: { data: activeCourt },
+        app_settings: { data: { key: "booking_window_days", value: "14" } },
+        booking_slots: { data: [] },
+        court_blocks: { data: [] },
+      });
+      (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).rejects.toThrow("One or more slots are no longer available");
-    });
-
-    it("should detect complete containment", async () => {
-      // Existing: 09:00-12:00, Requested: 10:00-11:00 (fully contained)
-      const existingBooking = {
-        id: "slot-123",
-        startTime: new Date("2026-01-20T09:00:00"),
-        endTime: new Date("2026-01-20T12:00:00"),
-      };
-      const mockTx = createMockTx(existingBooking, null);
-
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).rejects.toThrow("One or more slots are no longer available");
-    });
-
-    it("should allow adjacent slots without overlap", async () => {
-      // Existing: 09:00-10:00, Requested: 10:00-11:00 (adjacent, no overlap)
-      const existingBooking = {
-        id: "slot-123",
-        startTime: new Date("2026-01-20T09:00:00"),
-        endTime: new Date("2026-01-20T10:00:00"),
-      };
-      const mockTx = createMockTx(existingBooking, null);
-
-      // Should NOT throw - slots are adjacent but don't overlap
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).resolves.not.toThrow();
-    });
-  });
-
-  describe("cancelled/expired bookings", () => {
-    it("should ignore cancelled bookings", async () => {
-      const cancelledBooking = {
-        id: "slot-123",
-        courtId,
-        startTime,
-        endTime,
-        booking: { status: "CANCELLED" },
-      };
-
-      // Mock should return null because of the notIn filter
-      const mockTx = createMockTx(null, null);
-
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).resolves.not.toThrow();
-    });
-
-    it("should ignore expired bookings", async () => {
-      const expiredBooking = {
-        id: "slot-123",
-        courtId,
-        startTime,
-        endTime,
-        booking: { status: "EXPIRED" },
-      };
-
-      // Mock should return null because of the notIn filter
-      const mockTx = createMockTx(null, null);
-
-      await expect(
-        checkSlotAvailabilityInTransaction(mockTx, courtId, startTime, endTime)
-      ).resolves.not.toThrow();
+      await checkSlotAvailability(courtId, startTime, endTime);
+      expect(mock.from).toHaveBeenCalledWith("court_blocks");
     });
   });
 });

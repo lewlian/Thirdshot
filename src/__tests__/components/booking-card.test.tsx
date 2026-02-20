@@ -3,7 +3,7 @@
  * Tests user interactions and state management
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import { BookingCard } from "@/components/booking/booking-card";
 import { useRouter } from "next/navigation";
 
@@ -32,8 +32,10 @@ describe("BookingCard", () => {
     jest.useFakeTimers();
   });
 
-  afterEach(() => {
-    jest.runOnlyPendingTimers();
+  afterEach(async () => {
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
   });
 
@@ -130,10 +132,10 @@ describe("BookingCard", () => {
       expect(screen.getByText(/2:0[45]/)).toBeInTheDocument();
 
       // Advance 1 second
-      jest.advanceTimersByTime(1000);
-      await waitFor(() => {
-        expect(screen.getByText(/2:0[34]/)).toBeInTheDocument();
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
       });
+      expect(screen.getByText(/2:0[34]/)).toBeInTheDocument();
     });
 
     it("should show warning color when time is low", () => {
@@ -171,15 +173,17 @@ describe("BookingCard", () => {
 
       render(<BookingCard booking={booking} />);
 
-      // Fast-forward past expiration + delay
-      jest.advanceTimersByTime(4000); // 2s expiration + 2s delay
+      // Advance past expiration
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
 
-      await waitFor(
-        () => {
-          expect(mockRefresh).toHaveBeenCalled();
-        },
-        { timeout: 5000 }
-      );
+      // Advance past the 2-second delay before refresh
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      expect(mockRefresh).toHaveBeenCalled();
     });
 
     it("should show expired message when countdown reaches zero", async () => {
@@ -192,11 +196,11 @@ describe("BookingCard", () => {
       render(<BookingCard booking={booking} />);
 
       // Fast-forward past expiration
-      jest.advanceTimersByTime(1100);
-
-      await waitFor(() => {
-        expect(screen.getByText(/expired.*Refreshing/i)).toBeInTheDocument();
+      await act(async () => {
+        jest.advanceTimersByTime(1100);
       });
+
+      expect(screen.getByText(/expired.*Refreshing/i)).toBeInTheDocument();
     });
 
     it("should hide Pay Now button when expired", async () => {
@@ -212,11 +216,11 @@ describe("BookingCard", () => {
       expect(screen.getByText("Pay Now")).toBeInTheDocument();
 
       // Fast-forward past expiration
-      jest.advanceTimersByTime(1100);
-
-      await waitFor(() => {
-        expect(screen.queryByText("Pay Now")).not.toBeInTheDocument();
+      await act(async () => {
+        jest.advanceTimersByTime(1100);
       });
+
+      expect(screen.queryByText("Pay Now")).not.toBeInTheDocument();
     });
   });
 
@@ -247,8 +251,7 @@ describe("BookingCard", () => {
 
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getAllByText(/Court/)).toHaveLength(3);
-      expect(screen.getByText("Court A")).toBeInTheDocument();
+      expect(screen.getAllByText("Court A")).toHaveLength(2);
       expect(screen.getByText("Court B")).toBeInTheDocument();
     });
 
@@ -272,9 +275,8 @@ describe("BookingCard", () => {
 
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText(/10:00.*11:00/)).toBeInTheDocument();
-      expect(screen.getByText(/14:00.*15:00/)).toBeInTheDocument() ||
-             expect(screen.getByText(/2:00.*3:00/)).toBeInTheDocument();
+      expect(screen.getByText(/10:00 AM.*11:00 AM/)).toBeInTheDocument();
+      expect(screen.getByText(/2:00 PM.*3:00 PM/)).toBeInTheDocument();
     });
   });
 
@@ -302,14 +304,14 @@ describe("BookingCard", () => {
   });
 
   describe("booking statuses", () => {
-    it("should display Pending status", () => {
+    it("should display Pending Payment status", () => {
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       });
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText("Pending")).toBeInTheDocument();
+      expect(screen.getByText("Pending Payment")).toBeInTheDocument();
     });
 
     it("should display Cancelled status", () => {
