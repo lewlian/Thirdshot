@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getBookableDates } from "@/lib/booking/availability";
 import { CourtBookingForm } from "./booking-form";
 
@@ -9,9 +9,13 @@ interface CourtPageProps {
 
 export async function generateMetadata({ params }: CourtPageProps) {
   const { courtId } = await params;
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
 
   if (!court) {
     return { title: "Court Not Found" };
@@ -25,21 +29,26 @@ export async function generateMetadata({ params }: CourtPageProps) {
 
 export default async function CourtPage({ params }: CourtPageProps) {
   const { courtId } = await params;
+  const supabase = await createServerSupabaseClient();
 
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-  });
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
 
-  if (!court || !court.isActive) {
+  if (!court || !court.is_active) {
     notFound();
   }
 
   const bookableDates = await getBookableDates();
 
   // Get max consecutive slots setting
-  const maxSlotsSetting = await prisma.appSetting.findUnique({
-    where: { key: "max_consecutive_slots" },
-  });
+  const { data: maxSlotsSetting } = await supabase
+    .from('app_settings')
+    .select('*')
+    .eq('key', 'max_consecutive_slots')
+    .single();
   const maxSlots = maxSlotsSetting ? parseInt(maxSlotsSetting.value) : 3;
 
   return (

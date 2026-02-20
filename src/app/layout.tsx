@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
-import { Header } from "@/components/common/header";
-import { getUser } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,17 +23,6 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabaseUser = await getUser();
-
-  // Get the Prisma user with role information
-  let dbUser = null;
-  if (supabaseUser) {
-    dbUser = await prisma.user.findUnique({
-      where: { supabaseId: supabaseUser.id },
-      select: { role: true },
-    });
-  }
-
   return (
     <html lang="en">
       <body

@@ -1,21 +1,19 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createClient } from "@supabase/supabase-js";
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DIRECT_URL,
-});
-
-const prisma = new PrismaClient({ adapter });
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 async function main() {
-  const setting = await prisma.appSetting.findUnique({
-    where: { key: "booking_window_days" },
-  });
+  const { data: setting } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "booking_window_days")
+    .single();
 
   console.log("Booking window days:", setting?.value || "Not found");
-
-  await prisma.$disconnect();
 }
 
 main();

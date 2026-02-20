@@ -3,25 +3,25 @@
  * Tests booking price calculations for different scenarios
  */
 
-import type { Court } from "@prisma/client";
+import type { Court } from "@/types";
 
 // Mock court data
 const createMockCourt = (overrides: Partial<Court> = {}): Court => ({
   id: "court-1",
   name: "Test Court",
   description: "Test Description",
-  isActive: true,
-  isIndoor: true,
-  pricePerHourCents: 2000, // $20/hr standard
-  peakPricePerHourCents: 3000, // $30/hr peak
-  surfaceType: "Premium",
-  hasLighting: true,
-  openTime: "08:00",
-  closeTime: "22:00",
-  slotDurationMinutes: 60,
-  sortOrder: 1,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  is_active: true,
+  is_indoor: true,
+  price_per_hour_cents: 2000, // $20/hr standard
+  peak_price_per_hour_cents: 3000, // $30/hr peak
+  surface_type: "Premium",
+  has_lighting: true,
+  open_time: "08:00",
+  close_time: "22:00",
+  slot_duration_minutes: 60,
+  sort_order: 1,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
   ...overrides,
 });
 
@@ -31,7 +31,7 @@ function calculateBookingPrice(
   startTime: Date,
   slots: number
 ): { slots: any[]; totalCents: number; currency: string } {
-  const slotDurationHours = court.slotDurationMinutes / 60;
+  const slotDurationHours = court.slot_duration_minutes / 60;
   const breakdown = {
     slots: [] as any[],
     totalCents: 0,
@@ -47,9 +47,9 @@ function calculateBookingPrice(
     const isPeak = isPeakTime(currentStart);
 
     const priceInCents =
-      isPeak && court.peakPricePerHourCents
-        ? court.peakPricePerHourCents
-        : court.pricePerHourCents;
+      isPeak && court.peak_price_per_hour_cents
+        ? court.peak_price_per_hour_cents
+        : court.price_per_hour_cents;
 
     breakdown.slots.push({
       startTime: currentStart,
@@ -172,7 +172,7 @@ describe("calculateBookingPrice", () => {
   describe("courts without peak pricing", () => {
     it("should use standard price even during peak times", () => {
       const noPeakCourt = createMockCourt({
-        peakPricePerHourCents: null,
+        peak_price_per_hour_cents: null,
       });
       const saturday10am = new Date("2026-01-17T10:00:00");
       const result = calculateBookingPrice(noPeakCourt, saturday10am, 2);
@@ -185,7 +185,7 @@ describe("calculateBookingPrice", () => {
   describe("slot duration variations", () => {
     it("should handle 30-minute slots", () => {
       const halfHourCourt = createMockCourt({
-        slotDurationMinutes: 30,
+        slot_duration_minutes: 30,
       });
       const monday10am = new Date("2026-01-19T10:00:00");
       const result = calculateBookingPrice(halfHourCourt, monday10am, 2);
@@ -202,7 +202,7 @@ describe("calculateBookingPrice", () => {
 
     it("should handle 90-minute slots", () => {
       const ninetyMinCourt = createMockCourt({
-        slotDurationMinutes: 90,
+        slot_duration_minutes: 90,
       });
       const monday10am = new Date("2026-01-19T10:00:00");
       const result = calculateBookingPrice(ninetyMinCourt, monday10am, 2);

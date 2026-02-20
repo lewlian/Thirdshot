@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { formatInTimeZone } from "date-fns-tz";
@@ -6,6 +6,8 @@ import { formatInTimeZone } from "date-fns-tz";
 const TIMEZONE = "Asia/Singapore";
 
 async function getDashboardStats() {
+  const supabase = await createServerSupabaseClient();
+
   const now = new Date();
   const startOfToday = new Date(
     formatInTimeZone(now, TIMEZONE, "yyyy-MM-dd") + "T00:00:00+08:00"
@@ -15,54 +17,44 @@ async function getDashboardStats() {
   );
 
   const [
-    totalUsers,
-    totalBookings,
-    totalCourts,
-    todayBookings,
-    pendingBookings,
-    recentBookings,
-    revenue,
+    { count: totalUsers },
+    { count: totalBookings },
+    { count: totalCourts },
+    { count: todayBookings },
+    { count: pendingBookings },
+    { data: recentBookings },
+    { data: revenueData },
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.booking.count(),
-    prisma.court.count(),
+    supabase.from('users').select('*', { count: 'exact', head: true }),
+    supabase.from('bookings').select('*', { count: 'exact', head: true }),
+    supabase.from('courts').select('*', { count: 'exact', head: true }),
     // Count today's confirmed bookings by checking their slots
-    prisma.bookingSlot.count({
-      where: {
-        startTime: { gte: startOfToday, lte: endOfToday },
-        booking: {
-          status: "CONFIRMED",
-        },
-      },
-    }),
-    prisma.booking.count({
-      where: { status: "PENDING_PAYMENT" },
-    }),
-    prisma.booking.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: true,
-        slots: {
-          include: { court: true },
-          orderBy: { startTime: "asc" },
-        },
-      },
-    }),
-    prisma.payment.aggregate({
-      where: { status: "COMPLETED" },
-      _sum: { amountCents: true },
-    }),
+    supabase
+      .from('booking_slots')
+      .select('*, bookings!inner(status)', { count: 'exact', head: true })
+      .gte('start_time', startOfToday.toISOString())
+      .lte('start_time', endOfToday.toISOString())
+      .eq('bookings.status', 'CONFIRMED'),
+    supabase
+      .from('bookings')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'PENDING_PAYMENT'),
+    supabase
+      .from('bookings')
+      .select('*, users(*), booking_slots(*, courts(*))')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase.rpc('get_total_revenue'),
   ]);
 
   return {
-    totalUsers,
-    totalBookings,
-    totalCourts,
-    todayBookings,
-    pendingBookings,
-    recentBookings,
-    totalRevenue: revenue._sum.amountCents || 0,
+    totalUsers: totalUsers || 0,
+    totalBookings: totalBookings || 0,
+    totalCourts: totalCourts || 0,
+    todayBookings: todayBookings || 0,
+    pendingBookings: pendingBookings || 0,
+    recentBookings: recentBookings || [],
+    totalRevenue: (revenueData as number) || 0,
   };
 }
 
@@ -183,7 +175,10 @@ export default async function AdminDashboardPage() {
           ) : (
             <div className="divide-y">
               {stats.recentBookings.map((booking) => {
-                const firstSlot = booking.slots[0];
+                const sortedSlots = [...(booking.booking_slots || [])].sort(
+                  (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                );
+                const firstSlot = sortedSlots[0];
                 return (
                   <div
                     key={booking.id}
@@ -191,18 +186,18 @@ export default async function AdminDashboardPage() {
                   >
                     <div>
                       <p className="font-medium">
-                        {booking.user.name || booking.user.email}
+                        {booking.users?.name || booking.users?.email}
                       </p>
                       <p className="text-sm text-gray-500">
                         {firstSlot
-                          ? booking.slots.length > 1
-                            ? `${booking.slots.length} slots • ${formatInTimeZone(
-                                firstSlot.startTime,
+                          ? sortedSlots.length > 1
+                            ? `${sortedSlots.length} slots • ${formatInTimeZone(
+                                firstSlot.start_time,
                                 TIMEZONE,
                                 "dd MMM, h:mm a"
                               )}`
-                            : `${firstSlot.court.name} • ${formatInTimeZone(
-                                firstSlot.startTime,
+                            : `${firstSlot.courts?.name} • ${formatInTimeZone(
+                                firstSlot.start_time,
                                 TIMEZONE,
                                 "dd MMM, h:mm a"
                               )}`

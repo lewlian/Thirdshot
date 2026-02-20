@@ -1,4 +1,4 @@
-import type { Court } from "@prisma/client";
+import type { Court } from "./index";
 
 export interface CourtWithAvailability extends Court {
   availableSlotsToday: number;

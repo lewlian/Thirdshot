@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { getProfileStats } from "@/lib/actions/user";
 import { getSavedPaymentMethod } from "@/lib/actions/payment-methods";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +14,13 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     redirect("/login");
@@ -89,7 +92,7 @@ export default async function ProfilePage() {
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Member since</span>
-              <span>{dbUser.createdAt.toLocaleDateString()}</span>
+              <span>{new Date(dbUser.created_at).toLocaleDateString()}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">Account type</span>

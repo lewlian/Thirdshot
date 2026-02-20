@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { verifyWebhookSignature } from "@/lib/hitpay/client";
 import { sendBookingConfirmationEmail } from "@/lib/email/send";
 import type { WebhookPayload } from "@/lib/hitpay/types";
@@ -7,24 +7,6 @@ import type { WebhookPayload } from "@/lib/hitpay/types";
 /**
  * HitPay payment webhook endpoint
  * Receives payment status updates from HitPay and updates booking/payment records
- *
- * @route POST /api/webhooks/hitpay
- * @access Public (verified via HMAC signature)
- *
- * Request body (form-data):
- * - payment_id: HitPay payment ID
- * - payment_request_id: HitPay payment request ID
- * - reference_number: Our booking ID
- * - status: Payment status (completed, failed, pending)
- * - amount: Payment amount
- * - currency: Currency code (SGD)
- * - hmac: HMAC signature for verification
- *
- * Response:
- * - 200: Webhook processed successfully
- * - 401: Invalid signature
- * - 404: Booking/Payment not found
- * - 500: Server error
  */
 export async function POST(request: NextRequest) {
   try {
@@ -52,19 +34,14 @@ export async function POST(request: NextRequest) {
 
     // The reference_number is our booking ID
     const bookingId = payload.reference_number;
+    const adminClient = createAdminSupabaseClient();
 
     // Find the booking and payment
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: {
-        payment: true,
-        user: true,
-        slots: {
-          include: { court: true },
-          orderBy: { startTime: "asc" },
-        },
-      },
-    });
+    const { data: booking } = await adminClient
+      .from('bookings')
+      .select('*, payments(*), users(*), booking_slots(*, courts(*))')
+      .eq('id', bookingId)
+      .single();
 
     if (!booking) {
       console.error("Booking not found:", bookingId);
@@ -74,7 +51,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!booking.payment) {
+    const payment = booking.payments;
+    if (!payment) {
       console.error("Payment record not found for booking:", bookingId);
       return NextResponse.json(
         { error: "Payment record not found" },
@@ -84,40 +62,30 @@ export async function POST(request: NextRequest) {
 
     // Handle different payment statuses
     if (payload.status === "completed") {
-      // Payment successful - update booking and payment
-      await prisma.$transaction([
-        prisma.booking.update({
-          where: { id: bookingId },
-          data: {
-            status: "CONFIRMED",
-            expiresAt: null, // Clear expiry since payment is complete
-          },
-        }),
-        prisma.payment.update({
-          where: { id: booking.payment.id },
-          data: {
-            status: "COMPLETED",
-            method: "PAYNOW",
-            hitpayReferenceNo: payload.payment_id,
-            paidAt: new Date(),
-            webhookPayload: JSON.parse(JSON.stringify(payload)),
-          },
-        }),
-      ]);
+      // Payment successful - use RPC for atomic update
+      await adminClient.rpc('confirm_booking_payment', {
+        p_booking_id: bookingId,
+        p_payment_method: 'PAYNOW',
+        p_hitpay_reference: payload.payment_id,
+        p_webhook_payload: JSON.parse(JSON.stringify(payload)),
+      });
 
       // Send confirmation email using first slot for display
-      const firstSlot = booking.slots[0];
+      const sortedSlots = [...booking.booking_slots].sort(
+        (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+      );
+      const firstSlot = sortedSlots[0];
       if (firstSlot) {
         await sendBookingConfirmationEmail({
-          userEmail: booking.user.email,
-          userName: booking.user.name || "Guest",
+          userEmail: booking.users.email,
+          userName: booking.users.name || "Guest",
           courtName:
-            booking.slots.length > 1
-              ? `${booking.slots.length} slots`
-              : firstSlot.court.name,
-          startTime: firstSlot.startTime,
-          endTime: firstSlot.endTime,
-          totalCents: booking.totalCents,
+            sortedSlots.length > 1
+              ? `${sortedSlots.length} slots`
+              : firstSlot.courts.name,
+          startTime: new Date(firstSlot.start_time),
+          endTime: new Date(firstSlot.end_time),
+          totalCents: booking.total_cents,
           currency: booking.currency,
           bookingId: booking.id,
           paymentReference: payload.payment_id,
@@ -126,13 +94,13 @@ export async function POST(request: NextRequest) {
 
     } else if (payload.status === "failed") {
       // Payment failed
-      await prisma.payment.update({
-        where: { id: booking.payment.id },
-        data: {
+      await adminClient
+        .from('payments')
+        .update({
           status: "FAILED",
-          webhookPayload: JSON.parse(JSON.stringify(payload)),
-        },
-      });
+          webhook_payload: JSON.parse(JSON.stringify(payload)),
+        })
+        .eq('id', payment.id);
     }
 
     // Return success to HitPay

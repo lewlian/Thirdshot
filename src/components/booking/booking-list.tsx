@@ -11,22 +11,22 @@ type BookingType = "COURT_BOOKING" | "CORPORATE_BOOKING" | "PRIVATE_COACHING";
 
 interface BookingSlot {
   id: string;
-  startTime: Date;
-  endTime: Date;
-  court: {
+  start_time: string;
+  end_time: string;
+  courts: {
     name: string;
-    isIndoor: boolean;
-  };
+    is_indoor: boolean;
+  } | null;
 }
 
 interface Booking {
   id: string;
   type: BookingType;
-  totalCents: number;
+  total_cents: number;
   currency: string;
   status: BookingStatus;
-  expiresAt?: Date | null;
-  slots: BookingSlot[];
+  expires_at?: string | null;
+  booking_slots: BookingSlot[];
 }
 
 interface BookingListProps {
@@ -44,13 +44,13 @@ export function BookingList({ bookings, emptyMessage = "No bookings found" }: Bo
   }
 
   // Separate bookings with and without slots
-  const bookingsWithSlots = bookings.filter(b => b.slots.length > 0);
-  const bookingsWithoutSlots = bookings.filter(b => b.slots.length === 0);
+  const bookingsWithSlots = bookings.filter(b => b.booking_slots.length > 0);
+  const bookingsWithoutSlots = bookings.filter(b => b.booking_slots.length === 0);
 
   // Group bookings by date (using first slot's date)
   const bookingsByDate = bookingsWithSlots.reduce((acc, booking) => {
-    const firstSlot = booking.slots[0];
-    const startTimeSGT = toZonedTime(firstSlot.startTime, TIMEZONE);
+    const firstSlot = booking.booking_slots[0];
+    const startTimeSGT = toZonedTime(firstSlot.start_time, TIMEZONE);
     const dateKey = format(startTimeSGT, "yyyy-MM-dd");
 
     if (!acc[dateKey]) {

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import type { Court } from "@prisma/client";
+import type { Court } from "@/types";
 import type { TimeSlot } from "@/types/court";
 
 interface BookingSummaryProps {

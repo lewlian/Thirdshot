@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { BookingList } from "@/components/booking/booking-list";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,9 +12,13 @@ export default async function BookingsPage() {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     redirect("/login");
@@ -24,51 +27,49 @@ export default async function BookingsPage() {
   const now = new Date();
 
   // First, expire any pending bookings that have timed out
-  await prisma.booking.updateMany({
-    where: {
-      userId: dbUser.id,
-      status: "PENDING_PAYMENT",
-      expiresAt: {
-        lte: now,
-      },
-    },
-    data: {
+  await supabase
+    .from('bookings')
+    .update({
       status: "EXPIRED",
-      cancelledAt: now,
-      cancelReason: "Payment timeout - booking expired after 10 minutes",
-    },
-  });
+      cancelled_at: now.toISOString(),
+      cancel_reason: "Payment timeout - booking expired after 10 minutes",
+    })
+    .eq('user_id', dbUser.id)
+    .eq('status', 'PENDING_PAYMENT')
+    .lte('expires_at', now.toISOString());
 
   // Fetch all bookings for the user with their slots
-  const bookings = await prisma.booking.findMany({
-    where: { userId: dbUser.id },
-    include: {
-      slots: {
-        include: { court: true },
-        orderBy: { startTime: "asc" },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const { data: bookings } = await supabase
+    .from('bookings')
+    .select('*, booking_slots(*, courts(*))')
+    .eq('user_id', dbUser.id)
+    .order('created_at', { ascending: false });
+
+  const allBookings = (bookings || []).map((b) => ({
+    ...b,
+    booking_slots: [...(b.booking_slots || [])].sort(
+      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    ),
+  }));
 
   // Separate into upcoming, past, and cancelled/expired
-  const upcomingBookings = bookings.filter((b) => {
-    if (b.status !== "CONFIRMED" || b.slots.length === 0) return false;
-    const firstSlot = b.slots[0];
-    return new Date(firstSlot.startTime) > now;
+  const upcomingBookings = allBookings.filter((b) => {
+    if (b.status !== "CONFIRMED" || b.booking_slots.length === 0) return false;
+    const firstSlot = b.booking_slots[0];
+    return new Date(firstSlot.start_time) > now;
   });
 
-  const pendingBookings = bookings.filter(
+  const pendingBookings = allBookings.filter(
     (b) => b.status === "PENDING_PAYMENT"
   );
 
-  const pastBookings = bookings.filter((b) => {
-    if ((b.status !== "CONFIRMED" && b.status !== "COMPLETED") || b.slots.length === 0) return false;
-    const lastSlot = b.slots[b.slots.length - 1];
-    return new Date(lastSlot.endTime) <= now;
+  const pastBookings = allBookings.filter((b) => {
+    if ((b.status !== "CONFIRMED" && b.status !== "COMPLETED") || b.booking_slots.length === 0) return false;
+    const lastSlot = b.booking_slots[b.booking_slots.length - 1];
+    return new Date(lastSlot.end_time) <= now;
   });
 
-  const cancelledBookings = bookings.filter(
+  const cancelledBookings = allBookings.filter(
     (b) => b.status === "CANCELLED" || b.status === "EXPIRED"
   );
 

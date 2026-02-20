@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -23,9 +23,13 @@ export async function updateProfile(
     return { error: "Not authenticated" };
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found" };
@@ -41,13 +45,13 @@ export async function updateProfile(
     return { error: parsed.error.issues[0].message };
   }
 
-  await prisma.user.update({
-    where: { id: dbUser.id },
-    data: {
+  await supabase
+    .from('users')
+    .update({
       name: parsed.data.name,
       phone: parsed.data.phone,
-    },
-  });
+    })
+    .eq('id', dbUser.id);
 
   revalidatePath("/profile");
   return { success: true };
@@ -59,45 +63,34 @@ export async function getProfileStats() {
     return null;
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return null;
   }
 
-  const [totalBookings, upcomingBookings, completedBookings] = await Promise.all([
-    prisma.booking.count({
-      where: { userId: dbUser.id },
-    }),
-    prisma.booking.count({
-      where: {
-        userId: dbUser.id,
-        status: "CONFIRMED",
-        slots: {
-          some: {
-            startTime: { gt: new Date() },
-          },
-        },
-      },
-    }),
-    prisma.booking.count({
-      where: {
-        userId: dbUser.id,
-        status: { in: ["CONFIRMED", "COMPLETED"] },
-        slots: {
-          every: {
-            endTime: { lt: new Date() },
-          },
-        },
-      },
-    }),
-  ]);
+  // Use RPC for complex count queries with relation filters
+  const { data: stats } = await supabase.rpc('get_profile_stats', {
+    p_user_id: dbUser.id,
+  });
+
+  if (!stats) {
+    return {
+      totalBookings: 0,
+      upcomingBookings: 0,
+      completedBookings: 0,
+    };
+  }
 
   return {
-    totalBookings,
-    upcomingBookings,
-    completedBookings,
+    totalBookings: (stats as any).totalBookings || 0,
+    upcomingBookings: (stats as any).upcomingBookings || 0,
+    completedBookings: (stats as any).completedBookings || 0,
   };
 }

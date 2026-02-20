@@ -1,5 +1,4 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
 /**
@@ -16,9 +15,11 @@ export async function getAdminUser() {
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { supabaseId: supabaseUser.id },
-  });
+  const { data: user } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', supabaseUser.id)
+    .single();
 
   if (!user || user.role !== "ADMIN") {
     return null;
@@ -45,10 +46,13 @@ export async function requireAdmin() {
  * Check if a user ID is an admin (for server actions)
  */
 export async function isUserAdmin(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single();
 
   return user?.role === "ADMIN";
 }

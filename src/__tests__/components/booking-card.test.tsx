@@ -40,18 +40,18 @@ describe("BookingCard", () => {
   const createMockBooking = (overrides: any = {}) => ({
     id: "booking-123",
     type: "COURT_BOOKING",
-    totalCents: 4000,
+    total_cents: 4000,
     currency: "SGD",
     status: "CONFIRMED",
-    expiresAt: null,
-    slots: [
+    expires_at: null,
+    booking_slots: [
       {
         id: "slot-1",
-        startTime: new Date("2026-01-20T10:00:00"),
-        endTime: new Date("2026-01-20T11:00:00"),
-        court: {
+        start_time: "2026-01-20T10:00:00",
+        end_time: "2026-01-20T11:00:00",
+        courts: {
           name: "Court A",
-          isIndoor: true,
+          is_indoor: true,
         },
       },
     ],
@@ -97,7 +97,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -109,7 +109,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -121,7 +121,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 125 * 1000); // 2:05 from now
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -140,7 +140,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 90 * 1000); // 90 seconds (< 2 minutes)
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -153,7 +153,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -166,7 +166,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 2000); // 2 seconds from now
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -186,7 +186,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 1000); // 1 second from now
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -203,7 +203,7 @@ describe("BookingCard", () => {
       const expiresAt = new Date(Date.now() + 1000);
       const booking = createMockBooking({
         status: "PENDING_PAYMENT",
-        expiresAt,
+        expires_at: expiresAt,
       });
 
       render(<BookingCard booking={booking} />);
@@ -223,24 +223,24 @@ describe("BookingCard", () => {
   describe("multiple slots", () => {
     it("should display all slots", () => {
       const booking = createMockBooking({
-        slots: [
+        booking_slots: [
           {
             id: "slot-1",
-            startTime: new Date("2026-01-20T10:00:00"),
-            endTime: new Date("2026-01-20T11:00:00"),
-            court: { name: "Court A", isIndoor: true },
+            start_time: "2026-01-20T10:00:00",
+            end_time: "2026-01-20T11:00:00",
+            courts: { name: "Court A", is_indoor: true },
           },
           {
             id: "slot-2",
-            startTime: new Date("2026-01-20T11:00:00"),
-            endTime: new Date("2026-01-20T12:00:00"),
-            court: { name: "Court A", isIndoor: true },
+            start_time: "2026-01-20T11:00:00",
+            end_time: "2026-01-20T12:00:00",
+            courts: { name: "Court A", is_indoor: true },
           },
           {
             id: "slot-3",
-            startTime: new Date("2026-01-20T12:00:00"),
-            endTime: new Date("2026-01-20T13:00:00"),
-            court: { name: "Court B", isIndoor: false },
+            start_time: "2026-01-20T12:00:00",
+            end_time: "2026-01-20T13:00:00",
+            courts: { name: "Court B", is_indoor: false },
           },
         ],
       });
@@ -254,18 +254,18 @@ describe("BookingCard", () => {
 
     it("should display time ranges for each slot", () => {
       const booking = createMockBooking({
-        slots: [
+        booking_slots: [
           {
             id: "slot-1",
-            startTime: new Date("2026-01-20T10:00:00"),
-            endTime: new Date("2026-01-20T11:00:00"),
-            court: { name: "Court A", isIndoor: true },
+            start_time: "2026-01-20T10:00:00",
+            end_time: "2026-01-20T11:00:00",
+            courts: { name: "Court A", is_indoor: true },
           },
           {
             id: "slot-2",
-            startTime: new Date("2026-01-20T14:00:00"),
-            endTime: new Date("2026-01-20T15:00:00"),
-            court: { name: "Court B", isIndoor: true },
+            start_time: "2026-01-20T14:00:00",
+            end_time: "2026-01-20T15:00:00",
+            courts: { name: "Court B", is_indoor: true },
           },
         ],
       });
@@ -336,21 +336,21 @@ describe("BookingCard", () => {
 
   describe("price display", () => {
     it("should format price correctly", () => {
-      const booking = createMockBooking({ totalCents: 4500 });
+      const booking = createMockBooking({ total_cents: 4500 });
       render(<BookingCard booking={booking} />);
 
       expect(screen.getByText("$45.00 SGD")).toBeInTheDocument();
     });
 
     it("should handle zero cents", () => {
-      const booking = createMockBooking({ totalCents: 0 });
+      const booking = createMockBooking({ total_cents: 0 });
       render(<BookingCard booking={booking} />);
 
       expect(screen.getByText("$0.00 SGD")).toBeInTheDocument();
     });
 
     it("should handle large amounts", () => {
-      const booking = createMockBooking({ totalCents: 100000 }); // $1000
+      const booking = createMockBooking({ total_cents: 100000 }); // $1000
       render(<BookingCard booking={booking} />);
 
       expect(screen.getByText("$1000.00 SGD")).toBeInTheDocument();

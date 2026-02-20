@@ -1,5 +1,5 @@
 import { CourtCard } from "@/components/common/court-card";
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const metadata = {
   title: "Courts - Thirdshot",
@@ -7,10 +7,13 @@ export const metadata = {
 };
 
 export default async function CourtsPage() {
-  const courts = await prisma.court.findMany({
-    where: { isActive: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: courts } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order');
 
   return (
     <div className="min-h-screen bg-background">
@@ -26,7 +29,7 @@ export default async function CourtsPage() {
 
       {/* Content Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
-        {courts.length === 0 ? (
+        {!courts || courts.length === 0 ? (
           <div className="card-elevated bg-card rounded-2xl p-12 text-center">
             <p className="text-muted-foreground">No courts available at the moment.</p>
           </div>

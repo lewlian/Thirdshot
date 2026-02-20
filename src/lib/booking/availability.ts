@@ -1,26 +1,27 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { addDays, startOfDay, endOfDay, setHours, setMinutes, isBefore, isAfter } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import type { TimeSlot } from "@/types/court";
-import type { Court } from "@prisma/client";
+import type { Court } from "@/types";
 
 const TIMEZONE = "Asia/Singapore";
 
 /**
  * Get all time slots with availability status for a specific court on a specific date
- * @param courtId - ID of the court to check
- * @param date - Date to check availability for
- * @returns Array of time slots with availability information (isAvailable, isPeak, priceInCents)
  */
 export async function getCourtAvailability(
   courtId: string,
   date: Date
 ): Promise<TimeSlot[]> {
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-  });
+  const supabase = await createServerSupabaseClient();
 
-  if (!court || !court.isActive) {
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
+
+  if (!court || !court.is_active) {
     return [];
   }
 
@@ -28,43 +29,36 @@ export async function getCourtAvailability(
   const dayStart = startOfDay(date);
   const dayEnd = endOfDay(date);
 
-  const bookingSlots = await prisma.bookingSlot.findMany({
-    where: {
-      courtId,
-      startTime: { gte: dayStart, lt: dayEnd },
-      booking: {
-        status: { notIn: ["CANCELLED", "EXPIRED"] },
-      },
-    },
-  });
+  const { data: bookingSlots } = await supabase
+    .from('booking_slots')
+    .select('*, bookings!inner(status)')
+    .eq('court_id', courtId)
+    .gte('start_time', dayStart.toISOString())
+    .lt('start_time', dayEnd.toISOString())
+    .not('bookings.status', 'in', '("CANCELLED","EXPIRED")');
 
   // Get court blocks for this date
-  const blocks = await prisma.courtBlock.findMany({
-    where: {
-      courtId,
-      OR: [
-        { startTime: { gte: dayStart, lt: dayEnd } },
-        { endTime: { gt: dayStart, lte: dayEnd } },
-        { startTime: { lte: dayStart }, endTime: { gte: dayEnd } },
-      ],
-    },
-  });
+  const { data: blocks } = await supabase
+    .from('court_blocks')
+    .select('*')
+    .eq('court_id', courtId)
+    .or(`and(start_time.gte.${dayStart.toISOString()},start_time.lt.${dayEnd.toISOString()}),and(end_time.gt.${dayStart.toISOString()},end_time.lte.${dayEnd.toISOString()}),and(start_time.lte.${dayStart.toISOString()},end_time.gte.${dayEnd.toISOString()})`);
 
   // Generate time slots
   const slots = generateTimeSlots(court, date);
 
   // Mark unavailable slots
   return slots.map((slot) => {
-    const isBooked = bookingSlots.some(
+    const isBooked = (bookingSlots || []).some(
       (bookingSlot) =>
-        isBefore(slot.startTime, bookingSlot.endTime) &&
-        isAfter(slot.endTime, bookingSlot.startTime)
+        isBefore(slot.startTime, new Date(bookingSlot.end_time)) &&
+        isAfter(slot.endTime, new Date(bookingSlot.start_time))
     );
 
-    const isBlocked = blocks.some(
+    const isBlocked = (blocks || []).some(
       (block) =>
-        isBefore(slot.startTime, block.endTime) &&
-        isAfter(slot.endTime, block.startTime)
+        isBefore(slot.startTime, new Date(block.end_time)) &&
+        isAfter(slot.endTime, new Date(block.start_time))
     );
 
     // Check if slot is in the past
@@ -82,10 +76,10 @@ function generateTimeSlots(court: Court, date: Date): TimeSlot[] {
   const slots: TimeSlot[] = [];
 
   // Parse open and close times
-  const [openHour, openMin] = court.openTime.split(":").map(Number);
-  const [closeHour, closeMin] = court.closeTime.split(":").map(Number);
+  const [openHour, openMin] = court.open_time.split(":").map(Number);
+  const [closeHour, closeMin] = court.close_time.split(":").map(Number);
 
-  const slotDuration = court.slotDurationMinutes;
+  const slotDuration = court.slot_duration_minutes;
 
   // Create slots from open to close
   let currentHour = openHour;
@@ -112,9 +106,9 @@ function generateTimeSlots(court: Court, date: Date): TimeSlot[] {
     const isPeak = isPeakTime(currentHour, date);
 
     // Calculate price
-    const priceInCents = isPeak && court.peakPricePerHourCents
-      ? court.peakPricePerHourCents
-      : court.pricePerHourCents;
+    const priceInCents = isPeak && court.peak_price_per_hour_cents
+      ? court.peak_price_per_hour_cents
+      : court.price_per_hour_cents;
 
     slots.push({
       startTime,
@@ -150,13 +144,16 @@ function isPeakTime(hour: number, date: Date): boolean {
 
 /**
  * Get all dates within the booking window
- * @returns Array of Date objects representing bookable dates (today + N days based on booking_window_days setting)
  */
 export async function getBookableDates(): Promise<Date[]> {
+  const supabase = await createServerSupabaseClient();
+
   // Get booking window from settings (default 7 days)
-  const setting = await prisma.appSetting.findUnique({
-    where: { key: "booking_window_days" },
-  });
+  const { data: setting } = await supabase
+    .from('app_settings')
+    .select('*')
+    .eq('key', 'booking_window_days')
+    .single();
 
   const windowDays = setting ? parseInt(setting.value) : 7;
   const dates: Date[] = [];
@@ -171,23 +168,22 @@ export async function getBookableDates(): Promise<Date[]> {
 
 /**
  * Check if a specific time slot is available for booking
- * Validates court existence, past times, booking window, existing bookings, and court blocks
- * @param courtId - ID of the court to check
- * @param startTime - Start time of the slot
- * @param endTime - End time of the slot
- * @returns Object with availability status and optional reason if unavailable
  */
 export async function checkSlotAvailability(
   courtId: string,
   startTime: Date,
   endTime: Date
 ): Promise<{ available: boolean; reason?: string }> {
-  // Check if court exists and is active
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-  });
+  const supabase = await createServerSupabaseClient();
 
-  if (!court || !court.isActive) {
+  // Check if court exists and is active
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
+
+  if (!court || !court.is_active) {
     return { available: false, reason: "Court not available" };
   }
 
@@ -208,73 +204,31 @@ export async function checkSlotAvailability(
   }
 
   // Check for existing booking slots
-  const existingSlot = await prisma.bookingSlot.findFirst({
-    where: {
-      courtId,
-      startTime: { lt: endTime },
-      endTime: { gt: startTime },
-      booking: {
-        status: { notIn: ["CANCELLED", "EXPIRED"] },
-      },
-    },
-  });
+  const { data: existingSlots } = await supabase
+    .from('booking_slots')
+    .select('*, bookings!inner(status)')
+    .eq('court_id', courtId)
+    .lt('start_time', endTime.toISOString())
+    .gt('end_time', startTime.toISOString())
+    .not('bookings.status', 'in', '("CANCELLED","EXPIRED")')
+    .limit(1);
 
-  if (existingSlot) {
+  if (existingSlots && existingSlots.length > 0) {
     return { available: false, reason: "Slot is already booked" };
   }
 
   // Check for court blocks
-  const block = await prisma.courtBlock.findFirst({
-    where: {
-      courtId,
-      startTime: { lt: endTime },
-      endTime: { gt: startTime },
-    },
-  });
+  const { data: blockData } = await supabase
+    .from('court_blocks')
+    .select('*')
+    .eq('court_id', courtId)
+    .lt('start_time', endTime.toISOString())
+    .gt('end_time', startTime.toISOString())
+    .limit(1);
 
-  if (block) {
+  if (blockData && blockData.length > 0) {
     return { available: false, reason: "Court is blocked during this time" };
   }
 
   return { available: true };
-}
-
-/**
- * Check slot availability within a Prisma transaction
- * This is used during booking creation to prevent race conditions
- */
-export async function checkSlotAvailabilityInTransaction(
-  tx: any, // Prisma transaction client
-  courtId: string,
-  startTime: Date,
-  endTime: Date
-): Promise<void> {
-  // Check for existing booking slots
-  const existingSlot = await tx.bookingSlot.findFirst({
-    where: {
-      courtId,
-      startTime: { lt: endTime },
-      endTime: { gt: startTime },
-      booking: {
-        status: { notIn: ["CANCELLED", "EXPIRED"] },
-      },
-    },
-  });
-
-  if (existingSlot) {
-    throw new Error("One or more slots are no longer available");
-  }
-
-  // Check for court blocks
-  const block = await tx.courtBlock.findFirst({
-    where: {
-      courtId,
-      startTime: { lt: endTime },
-      endTime: { gt: startTime },
-    },
-  });
-
-  if (block) {
-    throw new Error("Court is blocked during selected time");
-  }
 }

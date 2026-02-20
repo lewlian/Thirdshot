@@ -3,24 +3,24 @@
  */
 
 import { render, screen } from "@testing-library/react";
-import { CourtCard } from "@/components/court-card";
+import { CourtCard } from "@/components/common/court-card";
 
 const mockCourt = {
   id: "court-1",
   name: "Court A",
   description: "Indoor court with premium surface",
-  isActive: true,
-  isIndoor: true,
-  pricePerHourCents: 2000,
-  peakPricePerHourCents: 3000,
-  surfaceType: "Premium",
-  hasLighting: true,
-  openTime: "08:00",
-  closeTime: "22:00",
-  slotDurationMinutes: 60,
-  sortOrder: 1,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  is_active: true,
+  is_indoor: true,
+  price_per_hour_cents: 2000,
+  peak_price_per_hour_cents: 3000,
+  surface_type: "Premium",
+  has_lighting: true,
+  open_time: "08:00",
+  close_time: "22:00",
+  slot_duration_minutes: 60,
+  sort_order: 1,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
 };
 
 describe("CourtCard", () => {
@@ -42,7 +42,7 @@ describe("CourtCard", () => {
   });
 
   it("should display Outdoor badge for outdoor courts", () => {
-    const outdoorCourt = { ...mockCourt, isIndoor: false };
+    const outdoorCourt = { ...mockCourt, is_indoor: false };
     render(<CourtCard court={outdoorCourt} />);
     expect(screen.getByText("Outdoor")).toBeInTheDocument();
   });
@@ -55,11 +55,11 @@ describe("CourtCard", () => {
 
   it("should display peak price when available", () => {
     render(<CourtCard court={mockCourt} />);
-    expect(screen.getByText("($30/hr peak)")).toBeInTheDocument();
+    expect(screen.getByText("$30/hr peak hours")).toBeInTheDocument();
   });
 
   it("should not display peak price when not set", () => {
-    const noPeakCourt = { ...mockCourt, peakPricePerHourCents: null };
+    const noPeakCourt = { ...mockCourt, peak_price_per_hour_cents: null };
     render(<CourtCard court={noPeakCourt} />);
     expect(screen.queryByText(/peak/)).not.toBeInTheDocument();
   });
@@ -75,7 +75,7 @@ describe("CourtCard", () => {
   });
 
   it("should not display lighting when not available", () => {
-    const noLightingCourt = { ...mockCourt, hasLighting: false };
+    const noLightingCourt = { ...mockCourt, has_lighting: false };
     render(<CourtCard court={noLightingCourt} />);
     expect(screen.queryByText("Lighting")).not.toBeInTheDocument();
   });

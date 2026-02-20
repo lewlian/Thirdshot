@@ -2,9 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
-import { checkSlotAvailability, checkSlotAvailabilityInTransaction } from "@/lib/booking/availability";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { checkSlotAvailability } from "@/lib/booking/availability";
 import { calculateBookingPrice } from "@/lib/booking/pricing";
 import { sendBookingCancelledEmail } from "@/lib/email/send";
 import { createBookingSchema } from "@/lib/validations/booking";
@@ -27,28 +26,13 @@ export type BookingActionResult = {
 
 /**
  * Create a new court booking for consecutive time slots
- * Server action called from booking form
- *
- * @param formData - Form data containing:
- *   - courtId: ID of the court to book
- *   - date: ISO date string
- *   - startTime: Start time in HH:mm format
- *   - slots: Number of consecutive slots (1-3)
- *
- * Functionality:
- * - Validates input and user authentication
- * - Checks slot availability within transaction (prevents race conditions)
- * - Calculates pricing based on peak/regular hours
- * - Creates booking with PENDING_PAYMENT status
- * - Sets 10-minute expiration timer
- * - Creates payment record and HitPay payment request
- *
- * @returns BookingActionResult with success/error and bookingId
  */
 export async function createBooking(
   formData: FormData
 ): Promise<BookingActionResult> {
-  const user = await getUser();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect("/login");
   }
@@ -61,9 +45,11 @@ export async function createBooking(
   }
 
   // Get user from database
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found. Please sign in again." };
@@ -94,11 +80,13 @@ export async function createBooking(
   const { courtId, date, startTime, slots } = parsed.data;
 
   // Get court
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-  });
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
 
-  if (!court || !court.isActive) {
+  if (!court || !court.is_active) {
     return { error: "Court not available" };
   }
 
@@ -111,73 +99,48 @@ export async function createBooking(
   );
 
   // Calculate end time based on slots
-  const slotDurationHours = court.slotDurationMinutes / 60;
+  const slotDurationHours = court.slot_duration_minutes / 60;
   const endDateTime = addHours(startDateTime, slotDurationHours * slots);
 
-  // Check availability for all slots using transaction
-  try {
-    const booking = await prisma.$transaction(async (tx) => {
-      const bookingSlots = [];
+  // Calculate pricing
+  const priceBreakdown = await calculateBookingPrice(
+    court,
+    startDateTime,
+    slots
+  );
 
-      // Check availability within transaction to prevent race conditions
-      for (let i = 0; i < slots; i++) {
-        const slotStart = addHours(startDateTime, slotDurationHours * i);
-        const slotEnd = addHours(slotStart, slotDurationHours);
-
-        await checkSlotAvailabilityInTransaction(tx, courtId, slotStart, slotEnd);
-
-        bookingSlots.push({
-          courtId,
-          startTime: slotStart,
-          endTime: slotEnd,
-        });
-      }
-
-      // Calculate pricing
-      const priceBreakdown = await calculateBookingPrice(
-        court,
-        startDateTime,
-        slots
-      );
-
-      // Create the booking with slots
-      const newBooking = await tx.booking.create({
-        data: {
-          userId: dbUser.id,
-          type: "COURT_BOOKING",
-          totalCents: priceBreakdown.totalCents,
-          currency: priceBreakdown.currency,
-          status: "PENDING_PAYMENT",
-          expiresAt: addMinutes(new Date(), PAYMENT_TIMEOUT_MINUTES),
-          slots: {
-            create: bookingSlots.map((slot) => ({
-              courtId: slot.courtId,
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-              priceInCents: priceBreakdown.totalCents / slots, // Divide evenly
-            })),
-          },
-        },
-      });
-
-      // Create payment record
-      await tx.payment.create({
-        data: {
-          bookingId: newBooking.id,
-          userId: dbUser.id,
-          amountCents: priceBreakdown.totalCents,
-          currency: priceBreakdown.currency,
-          status: "PENDING",
-        },
-      });
-
-      return newBooking;
+  // Build slots JSON for the RPC function
+  const bookingSlots = [];
+  for (let i = 0; i < slots; i++) {
+    const slotStart = addHours(startDateTime, slotDurationHours * i);
+    const slotEnd = addHours(slotStart, slotDurationHours);
+    bookingSlots.push({
+      court_id: courtId,
+      start_time: slotStart.toISOString(),
+      end_time: slotEnd.toISOString(),
+      price_in_cents: priceBreakdown.totalCents / slots,
     });
+  }
+
+  try {
+    // Use RPC for atomic booking creation with availability check
+    const { data: bookingId, error } = await supabase.rpc('create_booking_with_slots', {
+      p_user_id: dbUser.id,
+      p_type: 'COURT_BOOKING',
+      p_total_cents: priceBreakdown.totalCents,
+      p_currency: priceBreakdown.currency,
+      p_expires_at: addMinutes(new Date(), PAYMENT_TIMEOUT_MINUTES).toISOString(),
+      p_slots: bookingSlots,
+    });
+
+    if (error) {
+      return { error: error.message };
+    }
 
     revalidatePath("/courts");
     revalidatePath("/bookings");
 
-    return { success: true, bookingId: booking.id };
+    return { success: true, bookingId };
   } catch (error) {
     if (error instanceof Error) {
       return { error: error.message };
@@ -195,28 +158,13 @@ interface SlotInput {
 
 /**
  * Create a new booking with multiple non-consecutive time slots
- * Used for calendar-based multi-court booking flow
- * Server action called from calendar availability component
- *
- * @param slots - Array of slot objects with:
- *   - courtId: ID of the court
- *   - startTime: ISO date-time string
- *   - endTime: ISO date-time string
- *   - priceInCents: Price for this specific slot
- *
- * Functionality:
- * - Validates user authentication
- * - Checks availability for all slots within transaction
- * - Creates single booking with multiple booking slots
- * - Sets PENDING_PAYMENT status with 10-minute expiration
- * - Creates payment record and HitPay payment request
- *
- * @returns BookingActionResult with success/error and bookingId
  */
 export async function createMultipleBookings(
   slots: SlotInput[]
 ): Promise<BookingActionResult> {
-  const user = await getUser();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect("/login");
   }
@@ -229,9 +177,11 @@ export async function createMultipleBookings(
   }
 
   // Get user from database
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found. Please sign in again." };
@@ -251,58 +201,33 @@ export async function createMultipleBookings(
   }
 
   try {
-    const booking = await prisma.$transaction(async (tx) => {
-      const expiresAt = addMinutes(new Date(), PAYMENT_TIMEOUT_MINUTES);
+    const totalCents = slots.reduce((sum, slot) => sum + slot.priceInCents, 0);
 
-      // Check availability for all slots first
-      for (const slot of slots) {
-        const startDateTime = new Date(slot.startTime);
-        const endDateTime = new Date(slot.endTime);
+    // Build slots JSON for the RPC function
+    const bookingSlots = slots.map((slot) => ({
+      court_id: slot.courtId,
+      start_time: slot.startTime,
+      end_time: slot.endTime,
+      price_in_cents: slot.priceInCents,
+    }));
 
-        await checkSlotAvailabilityInTransaction(tx, slot.courtId, startDateTime, endDateTime);
-      }
-
-      // Calculate total amount
-      const totalCents = slots.reduce((sum, slot) => sum + slot.priceInCents, 0);
-
-      // Create the booking
-      const newBooking = await tx.booking.create({
-        data: {
-          userId: dbUser.id,
-          type: "COURT_BOOKING",
-          totalCents,
-          currency: "SGD",
-          status: "PENDING_PAYMENT",
-          expiresAt,
-          slots: {
-            create: slots.map((slot) => ({
-              courtId: slot.courtId,
-              startTime: new Date(slot.startTime),
-              endTime: new Date(slot.endTime),
-              priceInCents: slot.priceInCents,
-            })),
-          },
-        },
-      });
-
-      // Create payment record
-      await tx.payment.create({
-        data: {
-          bookingId: newBooking.id,
-          userId: dbUser.id,
-          amountCents: totalCents,
-          currency: "SGD",
-          status: "PENDING",
-        },
-      });
-
-      return newBooking;
+    const { data: bookingId, error } = await supabase.rpc('create_booking_with_slots', {
+      p_user_id: dbUser.id,
+      p_type: 'COURT_BOOKING',
+      p_total_cents: totalCents,
+      p_currency: 'SGD',
+      p_expires_at: addMinutes(new Date(), PAYMENT_TIMEOUT_MINUTES).toISOString(),
+      p_slots: bookingSlots,
     });
+
+    if (error) {
+      return { error: error.message };
+    }
 
     revalidatePath("/courts");
     revalidatePath("/bookings");
 
-    return { success: true, bookingId: booking.id };
+    return { success: true, bookingId };
   } catch (error) {
     if (error instanceof Error) {
       return { error: error.message };
@@ -313,55 +238,39 @@ export async function createMultipleBookings(
 
 /**
  * Cancel a booking
- * Server action called from booking detail page
- *
- * @param bookingId - ID of the booking to cancel
- * @param reason - Optional cancellation reason
- *
- * Functionality:
- * - Verifies user owns the booking or is admin
- * - Validates booking is in cancellable state (CONFIRMED or PENDING_PAYMENT)
- * - Updates booking status to CANCELLED
- * - Releases time slots back to inventory
- * - Sends cancellation email notification
- * - TODO: Initiates refund for confirmed bookings (not yet implemented)
- *
- * @returns BookingActionResult with success/error status
  */
 export async function cancelBooking(
   bookingId: string,
   reason?: string
 ): Promise<BookingActionResult> {
-  const user = await getUser();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found" };
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: {
-      payment: true,
-      user: true,
-      slots: {
-        include: { court: true },
-        orderBy: { startTime: "asc" },
-      },
-    },
-  });
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('*, payments(*), users(*), booking_slots(*, courts(*))')
+    .eq('id', bookingId)
+    .single();
 
   if (!booking) {
     return { error: "Booking not found" };
   }
 
-  if (booking.userId !== dbUser.id) {
+  if (booking.user_id !== dbUser.id) {
     return { error: "You can only cancel your own bookings" };
   }
 
@@ -371,39 +280,41 @@ export async function cancelBooking(
 
   const wasConfirmed = booking.status === "CONFIRMED";
 
-  await prisma.booking.update({
-    where: { id: bookingId },
-    data: {
+  await supabase
+    .from('bookings')
+    .update({
       status: "CANCELLED",
-      cancelledAt: new Date(),
-      cancelReason: reason,
-    },
-  });
+      cancelled_at: new Date().toISOString(),
+      cancel_reason: reason,
+    })
+    .eq('id', bookingId);
 
   // Send cancellation email
   const refundAmount = wasConfirmed
-    ? `$${(booking.totalCents / 100).toFixed(2)} ${booking.currency}`
+    ? `$${(booking.total_cents / 100).toFixed(2)} ${booking.currency}`
     : undefined;
 
-  const firstSlot = booking.slots[0];
-  if (firstSlot) {
+  const bookingUser = booking.users;
+  const sortedSlots = [...(booking.booking_slots || [])].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+  const firstSlot = sortedSlots[0];
+  if (firstSlot && bookingUser) {
     await sendBookingCancelledEmail({
-      userEmail: booking.user.email,
-      userName: booking.user.name || "Guest",
+      userEmail: bookingUser.email,
+      userName: bookingUser.name || "Guest",
       courtName:
-        booking.slots.length > 1
-          ? `${booking.slots.length} slots`
-          : firstSlot.court.name,
-      startTime: firstSlot.startTime,
-      endTime: firstSlot.endTime,
-      totalCents: booking.totalCents,
+        sortedSlots.length > 1
+          ? `${sortedSlots.length} slots`
+          : firstSlot.courts.name,
+      startTime: new Date(firstSlot.start_time),
+      endTime: new Date(firstSlot.end_time),
+      totalCents: booking.total_cents,
       currency: booking.currency,
       bookingId: booking.id,
       refundAmount,
     });
   }
-
-  // TODO: If payment was completed, initiate refund via HitPay
 
   revalidatePath("/bookings");
   revalidatePath(`/bookings/${bookingId}`);
@@ -412,37 +323,35 @@ export async function cancelBooking(
 }
 
 export async function getBookingById(bookingId: string) {
-  const user = await getUser();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return null;
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return null;
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: {
-      payment: true,
-      user: true,
-      slots: {
-        include: { court: true },
-        orderBy: { startTime: "asc" },
-      },
-    },
-  });
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('*, payments(*), users(*), booking_slots(*, courts(*))')
+    .eq('id', bookingId)
+    .single();
 
   if (!booking) {
     return null;
   }
 
   // Check if user owns this booking or is admin
-  if (booking.userId !== dbUser.id && dbUser.role !== "ADMIN") {
+  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
     return null;
   }
 

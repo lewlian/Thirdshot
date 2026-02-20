@@ -1,19 +1,15 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 async function getCourts() {
-  return prisma.court.findMany({
-    orderBy: { name: "asc" },
-    include: {
-      _count: {
-        select: {
-          bookingSlots: true,
-        },
-      },
-    },
-  });
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from('courts')
+    .select('*, booking_slots(count)')
+    .order('name');
+  return data || [];
 }
 
 export default async function AdminCourtsPage() {
@@ -49,7 +45,7 @@ export default async function AdminCourtsPage() {
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       {court.name}
-                      {!court.isActive && (
+                      {!court.is_active && (
                         <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">
                           Inactive
                         </span>
@@ -80,13 +76,13 @@ export default async function AdminCourtsPage() {
                   <div>
                     <span className="text-gray-500">Price:</span>{" "}
                     <span className="font-medium">
-                      ${(court.pricePerHourCents / 100).toFixed(2)}/hr
+                      ${(court.price_per_hour_cents / 100).toFixed(2)}/hr
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-500">Booked Slots:</span>{" "}
                     <span className="font-medium">
-                      {court._count.bookingSlots}
+                      {(court.booking_slots as unknown as { count: number }[])?.[0]?.count ?? 0}
                     </span>
                   </div>
                 </div>

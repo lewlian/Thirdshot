@@ -1,49 +1,40 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { createClient } from "@supabase/supabase-js";
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DIRECT_URL,
-});
-
-const prisma = new PrismaClient({ adapter });
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 async function listAdmins() {
   try {
-    const admins = await prisma.user.findMany({
-      where: {
-        role: "ADMIN",
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-        lastLoginAt: true,
-      },
-      orderBy: {
-        createdAt: "asc",
-      },
-    });
+    const { data: admins, error } = await supabase
+      .from("users")
+      .select("id, email, name, created_at, last_login_at")
+      .eq("role", "ADMIN")
+      .order("created_at", { ascending: true });
 
-    if (admins.length === 0) {
-      console.log("\n❌ No admins found in the database.\n");
+    if (error) {
+      console.error("Error fetching admins:", error);
       return;
     }
 
-    console.log(`\n✅ Found ${admins.length} admin(s):\n`);
+    if (!admins || admins.length === 0) {
+      console.log("\nNo admins found in the database.\n");
+      return;
+    }
+
+    console.log(`\nFound ${admins.length} admin(s):\n`);
     admins.forEach((admin, index) => {
       console.log(`${index + 1}. ${admin.name || "No name"}`);
       console.log(`   Email: ${admin.email}`);
       console.log(`   ID: ${admin.id}`);
-      console.log(`   Created: ${admin.createdAt.toLocaleString()}`);
-      console.log(`   Last Login: ${admin.lastLoginAt ? admin.lastLoginAt.toLocaleString() : "Never"}`);
+      console.log(`   Created: ${new Date(admin.created_at).toLocaleString()}`);
+      console.log(`   Last Login: ${admin.last_login_at ? new Date(admin.last_login_at).toLocaleString() : "Never"}`);
       console.log("");
     });
   } catch (error) {
     console.error("Error fetching admins:", error);
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

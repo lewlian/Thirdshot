@@ -1,28 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendBookingReminderEmail } from "@/lib/email/send";
-import { addHours, subHours } from "date-fns";
+import { addHours } from "date-fns";
 
 /**
  * Cron endpoint to send booking reminder emails
  * Called by Vercel Cron daily (configured in vercel.json)
- *
- * @route GET /api/cron/send-reminders
- * @access Protected by optional CRON_SECRET environment variable
- *
- * Functionality:
- * - Finds all CONFIRMED bookings starting in ~24 hours
- * - Only sends reminders if reminderSentAt is null (no duplicate reminders)
- * - Sends reminder email to user
- * - Updates reminderSentAt timestamp
- *
- * Request headers:
- * - Authorization: Bearer {CRON_SECRET} (optional)
- *
- * Response:
- * - 200: { message, remindersSent, bookingIds }
- * - 401: Unauthorized (invalid CRON_SECRET)
- * - 500: Server error
  */
 export async function GET(request: NextRequest) {
   // Verify cron secret (optional but recommended for production)
@@ -35,12 +18,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = new Date();
+    const adminClient = createAdminSupabaseClient();
 
     // Find bookings starting in the next 24-26 hours
-    // We use a 2-hour window to account for cron timing variations
-    // If cron runs daily at midnight SGT, this catches bookings for tomorrow
-    const reminderWindowStart = addHours(now, 22); // 22 hours from now
-    const reminderWindowEnd = addHours(now, 26);   // 26 hours from now
+    const reminderWindowStart = addHours(now, 22);
+    const reminderWindowEnd = addHours(now, 26);
 
     console.log("Send reminders cron job started", {
       now: now.toISOString(),
@@ -48,31 +30,30 @@ export async function GET(request: NextRequest) {
       reminderWindowEnd: reminderWindowEnd.toISOString(),
     });
 
-    // Find all confirmed bookings in the reminder window that haven't received a reminder yet
-    const bookingsNeedingReminders = await prisma.booking.findMany({
-      where: {
-        status: "CONFIRMED",
-        reminderSentAt: null, // Only bookings that haven't received a reminder
-        slots: {
-          some: {
-            startTime: {
-              gte: reminderWindowStart,
-              lte: reminderWindowEnd,
-            },
-          },
-        },
-      },
-      include: {
-        user: true,
-        slots: {
-          include: {
-            court: true,
-          },
-          orderBy: {
-            startTime: "asc",
-          },
-        },
-      },
+    // Find all confirmed bookings that haven't received a reminder
+    // with slots in the reminder window
+    // Since Supabase can't do nested relation filters like Prisma's `some`,
+    // we fetch confirmed bookings without reminders and filter in JS
+    const { data: bookings } = await adminClient
+      .from('bookings')
+      .select('*, users(*), booking_slots(*, courts(*))')
+      .eq('status', 'CONFIRMED')
+      .is('reminder_sent_at', null);
+
+    if (!bookings || bookings.length === 0) {
+      console.log("No bookings need reminders at this time");
+      return NextResponse.json({
+        message: "No bookings need reminders",
+        remindersSent: 0,
+      });
+    }
+
+    // Filter to bookings with slots in the reminder window
+    const bookingsNeedingReminders = bookings.filter((booking) => {
+      return booking.booking_slots.some((slot) => {
+        const slotStart = new Date(slot.start_time);
+        return slotStart >= reminderWindowStart && slotStart <= reminderWindowEnd;
+      });
     });
 
     if (bookingsNeedingReminders.length === 0) {
@@ -88,41 +69,38 @@ export async function GET(request: NextRequest) {
     // Send reminders and track results
     const reminderResults = await Promise.allSettled(
       bookingsNeedingReminders.map(async (booking) => {
-        // Get the first slot for the booking (earliest start time)
-        const firstSlot = booking.slots[0];
-        const lastSlot = booking.slots[booking.slots.length - 1];
+        const sortedSlots = [...booking.booking_slots].sort(
+          (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        );
+        const firstSlot = sortedSlots[0];
+        const lastSlot = sortedSlots[sortedSlots.length - 1];
 
         if (!firstSlot || !lastSlot) {
           console.warn(`Booking ${booking.id} has no slots, skipping`);
           return null;
         }
 
-        // Get court name (all slots should be from the same booking, take first court name)
-        const courtName = firstSlot.court.name;
-
-        // Build booking URL
+        const courtName = firstSlot.courts.name;
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
         const bookingUrl = `${appUrl}/bookings/${booking.id}`;
 
-        // Send reminder email
         const emailSent = await sendBookingReminderEmail({
-          userEmail: booking.user.email,
-          userName: booking.user.name || "Player",
+          userEmail: booking.users.email,
+          userName: booking.users.name || "Player",
           courtName,
-          startTime: firstSlot.startTime,
-          endTime: lastSlot.endTime,
-          totalCents: booking.totalCents,
+          startTime: new Date(firstSlot.start_time),
+          endTime: new Date(lastSlot.end_time),
+          totalCents: booking.total_cents,
           currency: booking.currency,
           bookingId: booking.id,
           bookingUrl,
         });
 
         if (emailSent) {
-          // Update booking to mark reminder as sent
-          await prisma.booking.update({
-            where: { id: booking.id },
-            data: { reminderSentAt: now },
-          });
+          await adminClient
+            .from('bookings')
+            .update({ reminder_sent_at: now.toISOString() })
+            .eq('id', booking.id);
 
           console.log(`Reminder sent successfully for booking ${booking.id}`);
           return booking.id;

@@ -10,10 +10,10 @@ const TIMEZONE = "Asia/Singapore";
 
 interface Block {
   id: string;
-  startTime: Date;
-  endTime: Date;
+  start_time: string;
+  end_time: string;
   reason: string;
-  createdById: string;
+  created_by_id: string;
 }
 
 interface BlockListProps {
@@ -46,11 +46,11 @@ export function BlockList({ blocks }: BlockListProps) {
         >
           <div>
             <p className="font-medium">
-              {formatInTimeZone(block.startTime, TIMEZONE, "EEE, dd MMM yyyy")}
+              {formatInTimeZone(block.start_time, TIMEZONE, "EEE, dd MMM yyyy")}
             </p>
             <p className="text-sm text-gray-600">
-              {formatInTimeZone(block.startTime, TIMEZONE, "h:mm a")} -{" "}
-              {formatInTimeZone(block.endTime, TIMEZONE, "h:mm a")}
+              {formatInTimeZone(block.start_time, TIMEZONE, "h:mm a")} -{" "}
+              {formatInTimeZone(block.end_time, TIMEZONE, "h:mm a")}
             </p>
             {block.reason && (
               <p className="text-sm text-gray-500 mt-1">{block.reason}</p>

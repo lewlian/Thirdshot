@@ -1,8 +1,7 @@
 import { Header } from "@/components/common/header";
 import { MobileBottomNav } from "@/components/common/mobile-bottom-nav";
 import { Footer } from "@/components/common/footer";
-import { getUser } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function MainLayout({
   children,
@@ -11,13 +10,15 @@ export default async function MainLayout({
 }) {
   const supabaseUser = await getUser();
 
-  // Get the Prisma user with role information
   let dbUser = null;
   if (supabaseUser) {
-    dbUser = await prisma.user.findUnique({
-      where: { supabaseId: supabaseUser.id },
-      select: { role: true },
-    });
+    const supabase = await createServerSupabaseClient();
+    const { data } = await supabase
+      .from('users')
+      .select('role')
+      .eq('supabase_id', supabaseUser.id)
+      .single();
+    dbUser = data;
   }
 
   return (

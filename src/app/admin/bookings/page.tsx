@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatInTimeZone } from "date-fns-tz";
 import Link from "next/link";
@@ -13,34 +13,36 @@ interface AdminBookingsPageProps {
 
 async function getBookings(status?: string, page: number = 1) {
   const pageSize = 20;
-  const skip = (page - 1) * pageSize;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const where = status
-    ? { status: status.toUpperCase() as "CONFIRMED" | "PENDING_PAYMENT" | "CANCELLED" }
-    : {};
+  const supabase = await createServerSupabaseClient();
 
-  const [bookings, total] = await Promise.all([
-    prisma.booking.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pageSize,
-      include: {
-        user: true,
-        payment: true,
-        slots: {
-          include: { court: true },
-          orderBy: { startTime: "asc" },
-        },
-      },
-    }),
-    prisma.booking.count({ where }),
+  let bookingsQuery = supabase
+    .from('bookings')
+    .select('*, users(*), payments(*), booking_slots(*, courts(*))')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  let countQuery = supabase
+    .from('bookings')
+    .select('*', { count: 'exact', head: true });
+
+  if (status) {
+    const statusUpper = status.toUpperCase() as "CONFIRMED" | "PENDING_PAYMENT" | "CANCELLED" | "EXPIRED" | "COMPLETED" | "NO_SHOW";
+    bookingsQuery = bookingsQuery.eq('status', statusUpper);
+    countQuery = countQuery.eq('status', statusUpper);
+  }
+
+  const [{ data: bookings }, { count: total }] = await Promise.all([
+    bookingsQuery,
+    countQuery,
   ]);
 
   return {
-    bookings,
-    total,
-    pages: Math.ceil(total / pageSize),
+    bookings: bookings || [],
+    total: total || 0,
+    pages: Math.ceil((total || 0) / pageSize),
     currentPage: page,
   };
 }
@@ -89,24 +91,27 @@ export default async function AdminBookingsPage({
                 </thead>
                 <tbody className="divide-y">
                   {bookings.map((booking) => {
-                    const firstSlot = booking.slots[0];
+                    const sortedSlots = [...(booking.booking_slots || [])].sort(
+                      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                    );
+                    const firstSlot = sortedSlots[0];
                     return (
                       <tr key={booking.id} className="hover:bg-gray-50">
                         <td className="py-3 px-2">
                           <div>
                             <p className="font-medium">
-                              {booking.user.name || "No name"}
+                              {booking.users?.name || "No name"}
                             </p>
                             <p className="text-gray-500 text-xs">
-                              {booking.user.email}
+                              {booking.users?.email}
                             </p>
                           </div>
                         </td>
                         <td className="py-3 px-2">
                           {firstSlot
-                            ? booking.slots.length > 1
-                              ? `${booking.slots.length} slots`
-                              : firstSlot.court.name
+                            ? sortedSlots.length > 1
+                              ? `${sortedSlots.length} slots`
+                              : firstSlot.courts?.name
                             : "No slots"}
                         </td>
                         <td className="py-3 px-2">
@@ -114,24 +119,24 @@ export default async function AdminBookingsPage({
                             <div>
                               <p>
                                 {formatInTimeZone(
-                                  firstSlot.startTime,
+                                  firstSlot.start_time,
                                   TIMEZONE,
                                   "dd MMM yyyy"
                                 )}
                               </p>
                               <p className="text-gray-500 text-xs">
                                 {formatInTimeZone(
-                                  firstSlot.startTime,
+                                  firstSlot.start_time,
                                   TIMEZONE,
                                   "h:mm a"
                                 )}{" "}
                                 -{" "}
                                 {formatInTimeZone(
-                                  firstSlot.endTime,
+                                  firstSlot.end_time,
                                   TIMEZONE,
                                   "h:mm a"
                                 )}
-                                {booking.slots.length > 1 && ` (+${booking.slots.length - 1})`}
+                                {sortedSlots.length > 1 && ` (+${sortedSlots.length - 1})`}
                               </p>
                             </div>
                           ) : (
@@ -139,7 +144,7 @@ export default async function AdminBookingsPage({
                           )}
                         </td>
                         <td className="py-3 px-2">
-                          ${(booking.totalCents / 100).toFixed(2)}
+                          ${(booking.total_cents / 100).toFixed(2)}
                         </td>
                         <td className="py-3 px-2">
                           <span

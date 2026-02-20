@@ -10,8 +10,7 @@ import {
 import { CourtCard } from "@/components/common/court-card";
 import { CalendarAvailability } from "@/components/booking/calendar-availability";
 import { ProgramsSection } from "@/components/home/programs-section";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCalendarAvailability } from "@/lib/booking/aggregated-availability";
 import {
   CalendarDays,
@@ -38,52 +37,60 @@ const typeConfig: Record<BookingType, string> = {
 
 export default async function HomePage() {
   const user = await getUser();
+  const supabase = await createServerSupabaseClient();
 
   // Fetch courts
-  const courts = await prisma.court.findMany({
-    where: { isActive: true },
-    orderBy: { sortOrder: "asc" },
-    take: 4,
-  });
+  const { data: courts } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order')
+    .limit(4);
 
   // Fetch calendar availability (7 bookable days + 1 extra day)
   const calendarAvailability = await getCalendarAvailability(true);
 
   // Fetch user's upcoming bookings if logged in
-  let upcomingBookings: Awaited<
-    ReturnType<
-      typeof prisma.booking.findMany<{
-        include: { slots: { include: { court: true } } };
-      }>
-    >
-  > = [];
+  let upcomingBookings: Array<{
+    id: string;
+    status: string;
+    type: string;
+    created_at: string;
+    booking_slots: Array<{
+      id: string;
+      start_time: string;
+      end_time: string;
+      courts: { name: string } | null;
+    }>;
+  }> = [];
+
   if (user) {
-    const dbUser = await prisma.user.findUnique({
-      where: { supabaseId: user.id },
-    });
+    const { data: dbUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('supabase_id', user.id)
+      .single();
 
     if (dbUser) {
-      const bookings = await prisma.booking.findMany({
-        where: {
-          userId: dbUser.id,
-          status: { in: ["CONFIRMED", "PENDING_PAYMENT"] },
-          slots: {
-            some: {
-              startTime: { gte: new Date() },
-            },
-          },
-        },
-        include: {
-          slots: {
-            include: { court: true },
-            orderBy: { startTime: "asc" },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 3,
-      });
+      // Fetch recent bookings with slots, then filter for upcoming in JS
+      const { data: bookings } = await supabase
+        .from('bookings')
+        .select('*, booking_slots(*, courts(*))')
+        .eq('user_id', dbUser.id)
+        .in('status', ['CONFIRMED', 'PENDING_PAYMENT'])
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-      upcomingBookings = bookings;
+      if (bookings) {
+        const now = new Date();
+        upcomingBookings = bookings
+          .filter((b) =>
+            b.booking_slots?.some(
+              (slot) => new Date(slot.start_time) >= now
+            )
+          )
+          .slice(0, 3);
+      }
     }
   }
 
@@ -160,9 +167,12 @@ export default async function HomePage() {
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {upcomingBookings.map((booking) => {
-                const firstSlot = booking.slots[0];
+                const sortedSlots = [...(booking.booking_slots || [])].sort(
+                  (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+                );
+                const firstSlot = sortedSlots[0];
                 const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
-                const firstSlotStartSGT = firstSlot ? toZonedTime(firstSlot.startTime, TIMEZONE) : new Date();
+                const firstSlotStartSGT = firstSlot ? toZonedTime(firstSlot.start_time, TIMEZONE) : new Date();
 
                 return (
                   <Card
@@ -192,14 +202,14 @@ export default async function HomePage() {
                     <CardContent className="space-y-3">
                       {/* Display all slots */}
                       <div className="space-y-2">
-                        {booking.slots.map((slot) => {
-                          const slotStartSGT = toZonedTime(slot.startTime, TIMEZONE);
-                          const slotEndSGT = toZonedTime(slot.endTime, TIMEZONE);
+                        {sortedSlots.map((slot) => {
+                          const slotStartSGT = toZonedTime(slot.start_time, TIMEZONE);
+                          const slotEndSGT = toZonedTime(slot.end_time, TIMEZONE);
 
                           return (
                             <div key={slot.id} className="flex items-center gap-2 text-sm">
                               <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                              <span className="font-medium text-xs">{slot.court.name}</span>
+                              <span className="font-medium text-xs">{slot.courts?.name}</span>
                               <span className="text-gray-400">•</span>
                               <span className="text-muted-foreground text-xs">
                                 {format(slotStartSGT, "h:mm a")} - {format(slotEndSGT, "h:mm a")}

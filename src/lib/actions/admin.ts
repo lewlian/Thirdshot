@@ -1,10 +1,10 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminUser } from "@/lib/auth/admin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { Json } from "@/types/database";
 
 // Court schemas
 const courtSchema = z.object({
@@ -33,17 +33,19 @@ async function createAuditLog(
     notes?: string;
   }
 ) {
-  await prisma.adminAuditLog.create({
-    data: {
-      adminId,
+  const supabase = await createServerSupabaseClient();
+
+  await supabase
+    .from('admin_audit_logs')
+    .insert({
+      admin_id: adminId,
       action,
-      entityType,
-      entityId,
-      previousData: options?.previousData ? (options.previousData as Prisma.InputJsonValue) : undefined,
-      newData: options?.newData ? (options.newData as Prisma.InputJsonValue) : undefined,
+      entity_type: entityType,
+      entity_id: entityId,
+      previous_data: options?.previousData ? (options.previousData as Json) : undefined,
+      new_data: options?.newData ? (options.newData as Json) : undefined,
       notes: options?.notes || null,
-    },
-  });
+    });
 }
 
 // Court CRUD operations
@@ -68,9 +70,20 @@ export async function createCourt(formData: FormData) {
   }
 
   try {
-    const court = await prisma.court.create({
-      data: parsed.data,
-    });
+    const supabase = await createServerSupabaseClient();
+
+    const { data: court, error } = await supabase
+      .from('courts')
+      .insert({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        price_per_hour_cents: parsed.data.pricePerHourCents,
+        is_active: parsed.data.isActive,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "CREATE", "Court", court.id, {
       newData: { name: court.name },
@@ -107,10 +120,21 @@ export async function updateCourt(courtId: string, formData: FormData) {
   }
 
   try {
-    const court = await prisma.court.update({
-      where: { id: courtId },
-      data: parsed.data,
-    });
+    const supabase = await createServerSupabaseClient();
+
+    const { data: court, error } = await supabase
+      .from('courts')
+      .update({
+        name: parsed.data.name,
+        description: parsed.data.description,
+        price_per_hour_cents: parsed.data.pricePerHourCents,
+        is_active: parsed.data.isActive,
+      })
+      .eq('id', courtId)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "UPDATE", "Court", court.id, {
       newData: { name: court.name, changes: data },
@@ -133,26 +157,30 @@ export async function deleteCourt(courtId: string) {
   }
 
   try {
-    // Check for existing bookings by querying booking slots
-    const bookingSlotsCount = await prisma.bookingSlot.count({
-      where: {
-        courtId,
-        booking: {
-          status: { in: ["CONFIRMED", "PENDING_PAYMENT"] },
-        },
-      },
-    });
+    const supabase = await createServerSupabaseClient();
 
-    if (bookingSlotsCount > 0) {
+    // Check for existing bookings by querying booking slots with inner join
+    const { count: bookingSlotsCount } = await supabase
+      .from('booking_slots')
+      .select('*, bookings!inner(status)', { count: 'exact', head: true })
+      .eq('court_id', courtId)
+      .in('bookings.status', ['CONFIRMED', 'PENDING_PAYMENT']);
+
+    if (bookingSlotsCount && bookingSlotsCount > 0) {
       return {
         success: false,
         error: `Cannot delete court with ${bookingSlotsCount} active booking slots. Deactivate it instead.`,
       };
     }
 
-    const court = await prisma.court.delete({
-      where: { id: courtId },
-    });
+    const { data: court, error } = await supabase
+      .from('courts')
+      .delete()
+      .eq('id', courtId)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "DELETE", "Court", courtId, {
       previousData: { name: court.name },
@@ -192,34 +220,38 @@ export async function createCourtBlock(formData: FormData) {
   }
 
   try {
-    // Check for conflicting booking slots
-    const conflictingSlot = await prisma.bookingSlot.findFirst({
-      where: {
-        courtId: parsed.data.courtId,
-        startTime: { lt: parsed.data.endTime },
-        endTime: { gt: parsed.data.startTime },
-        booking: {
-          status: "CONFIRMED",
-        },
-      },
-    });
+    const supabase = await createServerSupabaseClient();
 
-    if (conflictingSlot) {
+    // Check for conflicting booking slots
+    const { data: conflictingSlots } = await supabase
+      .from('booking_slots')
+      .select('*, bookings!inner(status)')
+      .eq('court_id', parsed.data.courtId)
+      .lt('start_time', parsed.data.endTime.toISOString())
+      .gt('end_time', parsed.data.startTime.toISOString())
+      .eq('bookings.status', 'CONFIRMED')
+      .limit(1);
+
+    if (conflictingSlots && conflictingSlots.length > 0) {
       return {
         success: false,
         error: "There are existing bookings during this time period",
       };
     }
 
-    const block = await prisma.courtBlock.create({
-      data: {
-        courtId: parsed.data.courtId,
-        startTime: parsed.data.startTime,
-        endTime: parsed.data.endTime,
+    const { data: block, error } = await supabase
+      .from('court_blocks')
+      .insert({
+        court_id: parsed.data.courtId,
+        start_time: parsed.data.startTime.toISOString(),
+        end_time: parsed.data.endTime.toISOString(),
         reason: parsed.data.reason,
-        createdById: admin.id,
-      },
-    });
+        created_by_id: admin.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "CREATE", "CourtBlock", block.id, {
       newData: {
@@ -247,12 +279,19 @@ export async function deleteCourtBlock(blockId: string) {
   }
 
   try {
-    const block = await prisma.courtBlock.delete({
-      where: { id: blockId },
-    });
+    const supabase = await createServerSupabaseClient();
+
+    const { data: block, error } = await supabase
+      .from('court_blocks')
+      .delete()
+      .eq('id', blockId)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "DELETE", "CourtBlock", blockId, {
-      previousData: { courtId: block.courtId },
+      previousData: { courtId: block.court_id },
     });
 
     revalidatePath("/admin/courts");
@@ -273,26 +312,26 @@ export async function adminCancelBooking(bookingId: string, reason?: string) {
   }
 
   try {
-    const booking = await prisma.booking.update({
-      where: { id: bookingId },
-      data: {
+    const supabase = await createServerSupabaseClient();
+
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .update({
         status: "CANCELLED",
-        cancelledAt: new Date(),
-        cancelReason: reason,
-      },
-      include: {
-        user: true,
-        slots: {
-          include: { court: true },
-        },
-      },
-    });
+        cancelled_at: new Date().toISOString(),
+        cancel_reason: reason,
+      })
+      .eq('id', bookingId)
+      .select('*, users(*), booking_slots(*, courts(*))')
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "CANCEL", "Booking", bookingId, {
       newData: {
         reason,
-        userId: booking.userId,
-        slotCount: booking.slots.length,
+        userId: booking.user_id,
+        slotCount: booking.booking_slots.length,
       },
     });
 
@@ -321,10 +360,16 @@ export async function updateUserRole(
   }
 
   try {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-    });
+    const supabase = await createServerSupabaseClient();
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .update({ role })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
 
     await createAuditLog(admin.id, "UPDATE_ROLE", "User", userId, {
       newData: { newRole: role },

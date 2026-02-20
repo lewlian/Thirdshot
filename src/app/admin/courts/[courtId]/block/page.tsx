@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BlockForm } from "./block-form";
@@ -10,22 +10,25 @@ interface BlockCourtPageProps {
 
 export default async function BlockCourtPage({ params }: BlockCourtPageProps) {
   const { courtId } = await params;
+  const supabase = await createServerSupabaseClient();
 
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-    include: {
-      blocks: {
-        where: {
-          endTime: { gte: new Date() },
-        },
-        orderBy: { startTime: "asc" },
-      },
-    },
-  });
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
 
   if (!court) {
     notFound();
   }
+
+  // Fetch active blocks separately (Supabase doesn't support filtered includes)
+  const { data: blocks } = await supabase
+    .from('court_blocks')
+    .select('*')
+    .eq('court_id', courtId)
+    .gte('end_time', new Date().toISOString())
+    .order('start_time');
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -50,7 +53,7 @@ export default async function BlockCourtPage({ params }: BlockCourtPageProps) {
           <CardTitle>Active Blocks</CardTitle>
         </CardHeader>
         <CardContent>
-          <BlockList blocks={court.blocks} />
+          <BlockList blocks={blocks || []} />
         </CardContent>
       </Card>
     </div>

@@ -1,9 +1,9 @@
-import type { Booking, Court, Payment, User } from "@prisma/client";
+import type { Booking, Court, Payment, User } from "./index";
 
 export interface BookingWithRelations extends Booking {
-  court: Court;
-  user: User;
-  payment: Payment | null;
+  courts: Court;
+  users: User;
+  payments: Payment[] | null;
 }
 
 export interface BookingSlotSelection {

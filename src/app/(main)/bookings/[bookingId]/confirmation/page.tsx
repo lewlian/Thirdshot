@@ -2,8 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { getPaymentStatus } from "@/lib/hitpay/client";
 import { sendBookingConfirmationEmail } from "@/lib/email/send";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +26,15 @@ interface ConfirmationPageProps {
   searchParams: Promise<{ status?: string }>;
 }
 
+async function fetchBooking(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, bookingId: string) {
+  const { data } = await supabase
+    .from('bookings')
+    .select('*, payments(*), booking_slots(*, courts(*))')
+    .eq('id', bookingId)
+    .single();
+  return data;
+}
+
 export default async function ConfirmationPage({
   params,
   searchParams,
@@ -39,42 +47,39 @@ export default async function ConfirmationPage({
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('id, role, email, name')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     redirect("/login");
   }
 
-  let booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: {
-      payment: true,
-      slots: {
-        include: { court: true },
-        orderBy: { startTime: "asc" },
-      },
-    },
-  });
+  let booking = await fetchBooking(supabase, bookingId);
 
   if (!booking) {
     notFound();
   }
 
   // Check ownership
-  if (booking.userId !== dbUser.id && dbUser.role !== "ADMIN") {
+  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
     notFound();
   }
+
+  const payment = booking.payments;
 
   // If still pending and we have a HitPay payment ID, check the payment status
   // This handles the case when webhooks aren't available (localhost dev)
   if (
     booking.status === "PENDING_PAYMENT" &&
-    booking.payment?.hitpayPaymentId
+    payment?.hitpay_payment_id
   ) {
     try {
-      const hitpayStatus = await getPaymentStatus(booking.payment.hitpayPaymentId);
+      const hitpayStatus = await getPaymentStatus(payment.hitpay_payment_id);
 
       // Check if any payment is completed or failed
       const completedPayment = hitpayStatus.payments?.find(
@@ -86,77 +91,59 @@ export default async function ConfirmationPage({
 
       if (hitpayStatus.status === "completed" || completedPayment) {
         // Update our database to reflect the payment
-        await prisma.$transaction([
-          prisma.booking.update({
-            where: { id: bookingId },
-            data: {
-              status: "CONFIRMED",
-              expiresAt: null,
-            },
-          }),
-          prisma.payment.update({
-            where: { id: booking.payment.id },
-            data: {
-              status: "COMPLETED",
-              method: "PAYNOW",
-              paidAt: new Date(),
-            },
-          }),
-        ]);
+        await supabase
+          .from('bookings')
+          .update({
+            status: "CONFIRMED",
+            expires_at: null,
+          })
+          .eq('id', bookingId);
+
+        await supabase
+          .from('payments')
+          .update({
+            status: "COMPLETED",
+            method: "PAYNOW",
+            paid_at: new Date().toISOString(),
+          })
+          .eq('id', payment.id);
 
         // Refresh booking data
-        booking = await prisma.booking.findUnique({
-          where: { id: bookingId },
-          include: {
-            payment: true,
-            slots: {
-              include: { court: true },
-              orderBy: { startTime: "asc" },
-            },
-          },
-        });
+        booking = await fetchBooking(supabase, bookingId);
 
         if (!booking) {
           notFound();
         }
 
         // Send confirmation email (for localhost dev where webhooks don't work)
-        const firstSlot = booking.slots[0];
+        const sortedSlots = [...(booking.booking_slots || [])].sort(
+          (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        );
+        const firstSlot = sortedSlots[0];
         if (firstSlot) {
           await sendBookingConfirmationEmail({
             userEmail: dbUser.email,
             userName: dbUser.name || "Guest",
             courtName:
-              booking.slots.length > 1
-                ? `${booking.slots.length} slots`
-                : firstSlot.court.name,
-            startTime: firstSlot.startTime,
-            endTime: firstSlot.endTime,
-            totalCents: booking.totalCents,
+              sortedSlots.length > 1
+                ? `${sortedSlots.length} slots`
+                : firstSlot.courts?.name || "",
+            startTime: new Date(firstSlot.start_time),
+            endTime: new Date(firstSlot.end_time),
+            totalCents: booking.total_cents,
             currency: booking.currency,
             bookingId: booking.id,
           });
         }
       } else if (hitpayStatus.status === "failed" || failedPayment) {
         // Update payment status to FAILED
-        await prisma.payment.update({
-          where: { id: booking.payment.id },
-          data: {
-            status: "FAILED",
-          },
-        });
+        await supabase
+          .from('payments')
+          .update({ status: "FAILED" })
+          .eq('id', payment.id);
 
         // Refresh booking data to reflect the failed payment
-        booking = await prisma.booking.findUnique({
-          where: { id: bookingId },
-          include: {
-            payment: true,
-            slots: {
-              include: { court: true },
-              orderBy: { startTime: "asc" },
-            },
-          },
-        });
+        booking = await fetchBooking(supabase, bookingId);
 
         if (!booking) {
           notFound();
@@ -173,17 +160,21 @@ export default async function ConfirmationPage({
     notFound();
   }
 
-  const firstSlot = booking.slots[0];
+  const currentPayment = booking.payments;
+  const sortedSlots = [...(booking.booking_slots || [])].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+  const firstSlot = sortedSlots[0];
   const startTimeSGT = firstSlot
-    ? toZonedTime(firstSlot.startTime, TIMEZONE)
+    ? toZonedTime(firstSlot.start_time, TIMEZONE)
     : new Date();
-  const totalDollars = (booking.totalCents / 100).toFixed(2);
+  const totalDollars = (booking.total_cents / 100).toFixed(2);
   const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
 
   // Determine status display
   const isConfirmed = booking.status === "CONFIRMED";
   const isPending = booking.status === "PENDING_PAYMENT";
-  const isFailed = queryStatus === "failed" || booking.payment?.status === "FAILED";
+  const isFailed = queryStatus === "failed" || currentPayment?.status === "FAILED";
   const isExpired = booking.status === "EXPIRED";
   const isCancelled = booking.status === "CANCELLED";
 
@@ -301,13 +292,13 @@ export default async function ConfirmationPage({
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground font-medium">Time Slots:</span>
               </div>
-              {booking.slots.map((slot) => {
-                const slotStartSGT = toZonedTime(slot.startTime, TIMEZONE);
-                const slotEndSGT = toZonedTime(slot.endTime, TIMEZONE);
+              {sortedSlots.map((slot) => {
+                const slotStartSGT = toZonedTime(slot.start_time, TIMEZONE);
+                const slotEndSGT = toZonedTime(slot.end_time, TIMEZONE);
                 return (
                   <div key={slot.id} className="flex items-center gap-2 text-sm ml-6 bg-white rounded-lg p-3">
                     <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
-                    <span className="font-semibold">{slot.court.name}</span>
+                    <span className="font-semibold">{slot.courts?.name}</span>
                     <span className="text-muted-foreground">•</span>
                     <span className="text-muted-foreground">
                       {format(slotStartSGT, "h:mm a")} - {format(slotEndSGT, "h:mm a")}
@@ -324,9 +315,9 @@ export default async function ConfirmationPage({
               </span>
             </div>
 
-            {booking.payment?.hitpayReferenceNo && (
+            {currentPayment?.hitpay_reference_no && (
               <div className="text-sm text-muted-foreground">
-                Reference: <span className="font-medium">{booking.payment.hitpayReferenceNo}</span>
+                Reference: <span className="font-medium">{currentPayment.hitpay_reference_no}</span>
               </div>
             )}
           </div>

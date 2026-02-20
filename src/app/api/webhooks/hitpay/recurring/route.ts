@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import type { RecurringWebhookPayload } from "@/lib/hitpay/recurring";
 
 /**
  * HitPay Recurring Billing Webhook
  * Handles card save confirmations and recurring charge notifications
- *
- * @route POST /api/webhooks/hitpay/recurring
- * @access Public (verified via HMAC signature)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -42,16 +39,12 @@ export async function POST(request: NextRequest) {
     const status = payload.status?.toLowerCase();
 
     if (status === "active" || status === "saved") {
-      // Card has been saved successfully
       await handleCardSaved(payload);
     } else if (status === "completed") {
-      // A charge on the saved card completed
       await handleChargeCompleted(payload);
     } else if (status === "failed") {
-      // A charge on the saved card failed
       await handleChargeFailed(payload);
     } else if (status === "cancelled" || status === "canceled") {
-      // The billing was cancelled
       await handleBillingCancelled(payload);
     }
 
@@ -82,7 +75,6 @@ function verifyRecurringWebhookSignature(
     return false;
   }
 
-  // Build the string to hash (all fields except hmac, sorted alphabetically)
   const sortedKeys = Object.keys(payload)
     .filter((key) => key !== "hmac")
     .sort();
@@ -111,44 +103,53 @@ function verifyRecurringWebhookSignature(
 async function handleCardSaved(payload: RecurringWebhookPayload) {
   const { recurring_billing_id, customer_email, card_brand, card_last_four, card_expiry_month, card_expiry_year } = payload;
 
+  const adminClient = createAdminSupabaseClient();
+
   // Find the user by email
-  const user = await prisma.user.findUnique({
-    where: { email: customer_email },
-    include: { savedPaymentMethod: true },
-  });
+  const { data: user } = await adminClient
+    .from('users')
+    .select('*')
+    .eq('email', customer_email)
+    .single();
 
   if (!user) {
     console.error(`User not found for email: ${customer_email}`);
     return;
   }
 
-  // Update or create the saved payment method
-  if (user.savedPaymentMethod) {
+  // Check if user already has a saved payment method
+  const { data: existingMethod } = await adminClient
+    .from('saved_payment_methods')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+
+  if (existingMethod) {
     // Update existing saved card
-    await prisma.savedPaymentMethod.update({
-      where: { userId: user.id },
-      data: {
-        hitpayBillingId: recurring_billing_id,
-        cardBrand: card_brand?.toLowerCase() || null,
-        cardLast4: card_last_four || null,
-        cardExpiryMonth: card_expiry_month || null,
-        cardExpiryYear: card_expiry_year || null,
-        isActive: true,
-      },
-    });
+    await adminClient
+      .from('saved_payment_methods')
+      .update({
+        hitpay_billing_id: recurring_billing_id,
+        card_brand: card_brand?.toLowerCase() || null,
+        card_last_4: card_last_four || null,
+        card_expiry_month: card_expiry_month || null,
+        card_expiry_year: card_expiry_year || null,
+        is_active: true,
+      })
+      .eq('user_id', user.id);
   } else {
     // Create new saved payment method
-    await prisma.savedPaymentMethod.create({
-      data: {
-        userId: user.id,
-        hitpayBillingId: recurring_billing_id,
-        cardBrand: card_brand?.toLowerCase() || null,
-        cardLast4: card_last_four || null,
-        cardExpiryMonth: card_expiry_month || null,
-        cardExpiryYear: card_expiry_year || null,
-        isActive: true,
-      },
-    });
+    await adminClient
+      .from('saved_payment_methods')
+      .insert({
+        user_id: user.id,
+        hitpay_billing_id: recurring_billing_id,
+        card_brand: card_brand?.toLowerCase() || null,
+        card_last_4: card_last_four || null,
+        card_expiry_month: card_expiry_month || null,
+        card_expiry_year: card_expiry_year || null,
+        is_active: true,
+      });
   }
 }
 
@@ -158,28 +159,20 @@ async function handleCardSaved(payload: RecurringWebhookPayload) {
 async function handleChargeCompleted(payload: RecurringWebhookPayload) {
   const { reference } = payload;
 
-  // If reference is a booking ID, update the booking
   if (reference) {
-    const booking = await prisma.booking.findUnique({
-      where: { id: reference },
-      include: { payment: true },
-    });
+    const adminClient = createAdminSupabaseClient();
 
-    if (booking && booking.payment) {
-      await prisma.$transaction([
-        prisma.booking.update({
-          where: { id: reference },
-          data: { status: "CONFIRMED" },
-        }),
-        prisma.payment.update({
-          where: { id: booking.payment.id },
-          data: {
-            status: "COMPLETED",
-            method: "SAVED_CARD",
-            paidAt: new Date(),
-          },
-        }),
-      ]);
+    const { data: booking } = await adminClient
+      .from('bookings')
+      .select('*, payments(*)')
+      .eq('id', reference)
+      .single();
+
+    if (booking && booking.payments) {
+      await adminClient.rpc('confirm_booking_payment', {
+        p_booking_id: reference,
+        p_payment_method: 'SAVED_CARD',
+      });
     }
   }
 }
@@ -190,20 +183,20 @@ async function handleChargeCompleted(payload: RecurringWebhookPayload) {
 async function handleChargeFailed(payload: RecurringWebhookPayload) {
   const { reference } = payload;
 
-  // If reference is a booking ID, update the payment status
   if (reference) {
-    const booking = await prisma.booking.findUnique({
-      where: { id: reference },
-      include: { payment: true },
-    });
+    const adminClient = createAdminSupabaseClient();
 
-    if (booking && booking.payment) {
-      await prisma.payment.update({
-        where: { id: booking.payment.id },
-        data: {
-          status: "FAILED",
-        },
-      });
+    const { data: booking } = await adminClient
+      .from('bookings')
+      .select('*, payments(*)')
+      .eq('id', reference)
+      .single();
+
+    if (booking && booking.payments) {
+      await adminClient
+        .from('payments')
+        .update({ status: "FAILED" })
+        .eq('id', booking.payments.id);
     }
   }
 }
@@ -214,15 +207,18 @@ async function handleChargeFailed(payload: RecurringWebhookPayload) {
 async function handleBillingCancelled(payload: RecurringWebhookPayload) {
   const { recurring_billing_id } = payload;
 
-  // Mark the saved payment method as inactive
-  const savedMethod = await prisma.savedPaymentMethod.findUnique({
-    where: { hitpayBillingId: recurring_billing_id },
-  });
+  const adminClient = createAdminSupabaseClient();
+
+  const { data: savedMethod } = await adminClient
+    .from('saved_payment_methods')
+    .select('*')
+    .eq('hitpay_billing_id', recurring_billing_id)
+    .single();
 
   if (savedMethod) {
-    await prisma.savedPaymentMethod.update({
-      where: { id: savedMethod.id },
-      data: { isActive: false },
-    });
+    await adminClient
+      .from('saved_payment_methods')
+      .update({ is_active: false })
+      .eq('id', savedMethod.id);
   }
 }

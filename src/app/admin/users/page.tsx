@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatInTimeZone } from "date-fns-tz";
 import Link from "next/link";
@@ -12,36 +12,36 @@ interface AdminUsersPageProps {
 
 async function getUsers(page: number = 1, search?: string) {
   const pageSize = 20;
-  const skip = (page - 1) * pageSize;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const where = search
-    ? {
-        OR: [
-          { email: { contains: search, mode: "insensitive" as const } },
-          { name: { contains: search, mode: "insensitive" as const } },
-        ],
-      }
-    : {};
+  const supabase = await createServerSupabaseClient();
 
-  const [users, total] = await Promise.all([
-    prisma.user.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pageSize,
-      include: {
-        _count: {
-          select: { bookings: true },
-        },
-      },
-    }),
-    prisma.user.count({ where }),
+  let usersQuery = supabase
+    .from('users')
+    .select('*, bookings(count)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  let countQuery = supabase
+    .from('users')
+    .select('*', { count: 'exact', head: true });
+
+  if (search) {
+    const searchFilter = `email.ilike.%${search}%,name.ilike.%${search}%`;
+    usersQuery = usersQuery.or(searchFilter);
+    countQuery = countQuery.or(searchFilter);
+  }
+
+  const [{ data: users }, { count: total }] = await Promise.all([
+    usersQuery,
+    countQuery,
   ]);
 
   return {
-    users,
-    total,
-    pages: Math.ceil(total / pageSize),
+    users: users || [],
+    total: total || 0,
+    pages: Math.ceil((total || 0) / pageSize),
     currentPage: page,
   };
 }
@@ -114,10 +114,12 @@ export default async function AdminUsersPage({
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="py-3 px-2">{user._count.bookings}</td>
+                      <td className="py-3 px-2">
+                        {(user.bookings as unknown as { count: number }[])?.[0]?.count ?? 0}
+                      </td>
                       <td className="py-3 px-2">
                         {formatInTimeZone(
-                          user.createdAt,
+                          user.created_at,
                           TIMEZONE,
                           "dd MMM yyyy"
                         )}

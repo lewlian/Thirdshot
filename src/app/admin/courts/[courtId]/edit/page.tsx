@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CourtForm } from "../../court-form";
@@ -9,10 +9,13 @@ interface EditCourtPageProps {
 
 export default async function EditCourtPage({ params }: EditCourtPageProps) {
   const { courtId } = await params;
+  const supabase = await createServerSupabaseClient();
 
-  const court = await prisma.court.findUnique({
-    where: { id: courtId },
-  });
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('id', courtId)
+    .single();
 
   if (!court) {
     notFound();

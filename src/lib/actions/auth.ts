@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 import {
   checkRateLimit,
@@ -82,10 +81,10 @@ export async function login(formData: FormData): Promise<AuthActionResult> {
     resetRateLimit(parsed.data.email, RATE_LIMITS.LOGIN_FAILED.keyPrefix);
 
     // Update last login
-    await prisma.user.updateMany({
-      where: { supabaseId: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    await supabase
+      .from('users')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('supabase_id', user.id);
   }
 
   redirect("/");
@@ -135,13 +134,13 @@ export async function signup(formData: FormData): Promise<AuthActionResult> {
   }
 
   // Create user in our database
-  await prisma.user.create({
-    data: {
+  await supabase
+    .from('users')
+    .insert({
       email: parsed.data.email,
       name: parsed.data.name,
-      supabaseId: data.user.id,
-    },
-  });
+      supabase_id: data.user.id,
+    });
 
   // Redirect to verify email page
   redirect(`/verify-email?email=${encodeURIComponent(parsed.data.email)}`);
@@ -177,26 +176,34 @@ export async function syncUserFromSupabase(supabaseUser: {
   email?: string;
   user_metadata?: { name?: string; avatar_url?: string };
 }) {
-  const existingUser = await prisma.user.findUnique({
-    where: { supabaseId: supabaseUser.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', supabaseUser.id)
+    .single();
 
   if (existingUser) {
     // Update last login
-    await prisma.user.update({
-      where: { id: existingUser.id },
-      data: { lastLoginAt: new Date() },
-    });
+    await supabase
+      .from('users')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', existingUser.id);
     return existingUser;
   }
 
   // Create new user
-  return prisma.user.create({
-    data: {
+  const { data: newUser } = await supabase
+    .from('users')
+    .insert({
       email: supabaseUser.email || "",
       name: supabaseUser.user_metadata?.name || null,
-      avatarUrl: supabaseUser.user_metadata?.avatar_url || null,
-      supabaseId: supabaseUser.id,
-    },
-  });
+      avatar_url: supabaseUser.user_metadata?.avatar_url || null,
+      supabase_id: supabaseUser.id,
+    })
+    .select()
+    .single();
+
+  return newUser;
 }

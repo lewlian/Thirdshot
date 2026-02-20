@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatInTimeZone } from "date-fns-tz";
 import Link from "next/link";
@@ -11,39 +11,48 @@ interface AuditLogPageProps {
 
 async function getAuditLogs(page: number = 1, action?: string) {
   const pageSize = 30;
-  const skip = (page - 1) * pageSize;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
 
-  const where = action ? { action } : {};
+  const supabase = await createServerSupabaseClient();
 
-  const [logs, total] = await Promise.all([
-    prisma.adminAuditLog.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: pageSize,
-      include: {
-        admin: {
-          select: { name: true, email: true },
-        },
-      },
-    }),
-    prisma.adminAuditLog.count({ where }),
+  let logsQuery = supabase
+    .from('admin_audit_logs')
+    .select('*, users(name, email)')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  let countQuery = supabase
+    .from('admin_audit_logs')
+    .select('*', { count: 'exact', head: true });
+
+  if (action) {
+    logsQuery = logsQuery.eq('action', action);
+    countQuery = countQuery.eq('action', action);
+  }
+
+  const [{ data: logs }, { count: total }] = await Promise.all([
+    logsQuery,
+    countQuery,
   ]);
 
   return {
-    logs,
-    total,
-    pages: Math.ceil(total / pageSize),
+    logs: logs || [],
+    total: total || 0,
+    pages: Math.ceil((total || 0) / pageSize),
     currentPage: page,
   };
 }
 
 async function getActionTypes() {
-  const actions = await prisma.adminAuditLog.groupBy({
-    by: ["action"],
-    _count: true,
-  });
-  return actions.map((a) => a.action);
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from('admin_audit_logs')
+    .select('action');
+
+  if (!data) return [];
+  // Deduplicate actions
+  return [...new Set(data.map((d) => d.action))];
 }
 
 function getActionColor(action: string) {
@@ -117,8 +126,9 @@ export default async function AuditLogPage({
           ) : (
             <div className="space-y-3">
               {logs.map((log) => {
-                const newData = log.newData as Record<string, unknown> | null;
-                const previousData = log.previousData as Record<string, unknown> | null;
+                const newData = log.new_data as Record<string, unknown> | null;
+                const previousData = log.previous_data as Record<string, unknown> | null;
+                const admin = log.users as unknown as { name: string | null; email: string } | null;
 
                 return (
                   <div
@@ -135,10 +145,10 @@ export default async function AuditLogPage({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm">
                         <span className="font-medium">
-                          {log.admin.name || log.admin.email}
+                          {admin?.name || admin?.email}
                         </span>{" "}
                         {log.action.toLowerCase()}d{" "}
-                        <span className="font-medium">{log.entityType}</span>
+                        <span className="font-medium">{log.entity_type}</span>
                         {typeof newData?.name === "string" && (
                           <span className="text-gray-600">
                             {" "}
@@ -168,7 +178,7 @@ export default async function AuditLogPage({
                     </div>
                     <time className="text-xs text-gray-500 whitespace-nowrap">
                       {formatInTimeZone(
-                        log.createdAt,
+                        log.created_at,
                         TIMEZONE,
                         "dd MMM yyyy, h:mm a"
                       )}

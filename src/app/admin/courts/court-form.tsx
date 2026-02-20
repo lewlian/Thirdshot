@@ -24,8 +24,8 @@ interface Court {
   id: string;
   name: string;
   description: string | null;
-  pricePerHourCents: number;
-  isActive: boolean;
+  price_per_hour_cents: number;
+  is_active: boolean;
 }
 
 interface CourtFormProps {
@@ -36,7 +36,7 @@ export function CourtForm({ court }: CourtFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [isActive, setIsActive] = useState(court?.isActive ?? true);
+  const [isActive, setIsActive] = useState(court?.is_active ?? true);
 
   const isEditing = !!court;
 
@@ -107,7 +107,7 @@ export function CourtForm({ court }: CourtFormProps) {
           step="0.01"
           min="0"
           defaultValue={
-            court ? (court.pricePerHourCents / 100).toFixed(2) : ""
+            court ? (court.price_per_hour_cents / 100).toFixed(2) : ""
           }
           placeholder="e.g., 20.00"
           required

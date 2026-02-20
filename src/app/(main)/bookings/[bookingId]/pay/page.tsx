@@ -1,8 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { createBookingPayment } from "@/lib/hitpay/client";
 import { getSavedPaymentMethod } from "@/lib/actions/payment-methods";
 import { PaymentClient } from "./payment-client";
@@ -21,36 +20,30 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('id, role')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     redirect("/login");
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: {
-      user: true,
-      payment: true,
-      slots: {
-        include: {
-          court: true,
-        },
-        orderBy: {
-          startTime: "asc",
-        },
-      },
-    },
-  });
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('*, users(*), payments(*), booking_slots(*, courts(*))')
+    .eq('id', bookingId)
+    .single();
 
   if (!booking) {
     notFound();
   }
 
   // Check ownership
-  if (booking.userId !== dbUser.id && dbUser.role !== "ADMIN") {
+  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
     notFound();
   }
 
@@ -65,44 +58,59 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
   }
 
   // Check if booking has expired
-  if (booking.expiresAt && new Date() > booking.expiresAt) {
+  if (booking.expires_at && new Date() > new Date(booking.expires_at)) {
     // Mark as expired
-    await prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: "EXPIRED", cancelledAt: new Date(), cancelReason: "Payment timeout - booking expired after 10 minutes" },
-    });
+    await supabase
+      .from('bookings')
+      .update({
+        status: "EXPIRED",
+        cancelled_at: new Date().toISOString(),
+        cancel_reason: "Payment timeout - booking expired after 10 minutes",
+      })
+      .eq('id', bookingId);
     redirect(`/?error=booking_expired`);
   }
 
-  // Create HitPay payment if not already created
-  let payment = booking.payment;
+  // Sort slots
+  const sortedSlots = [...(booking.booking_slots || [])].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
 
-  if (payment && !payment.hitpayPaymentId && booking.slots.length > 0) {
-    const firstSlot = booking.slots[0];
-    const startTimeSGT = toZonedTime(firstSlot.startTime, TIMEZONE);
-    const slotCount = booking.slots.length;
-    const courtNames = [...new Set(booking.slots.map((s) => s.court.name))].join(", ");
+  // Create HitPay payment if not already created
+  let payment = booking.payments || null;
+
+  if (payment && !payment.hitpay_payment_id && sortedSlots.length > 0) {
+    const firstSlot = sortedSlots[0];
+    const startTimeSGT = toZonedTime(firstSlot.start_time, TIMEZONE);
+    const slotCount = sortedSlots.length;
+    const courtNames = [...new Set(sortedSlots.map((s) => s.courts?.name))].join(", ");
 
     try {
       const hitpayResponse = await createBookingPayment({
         bookingId: booking.id,
-        amountCents: booking.totalCents,
+        amountCents: booking.total_cents,
         currency: booking.currency,
-        userEmail: booking.user.email,
-        userName: booking.user.name || undefined,
-        courtName: slotCount > 1 ? `${slotCount} slots (${courtNames})` : firstSlot.court.name,
+        userEmail: booking.users?.email || "",
+        userName: booking.users?.name || undefined,
+        courtName: slotCount > 1 ? `${slotCount} slots (${courtNames})` : firstSlot.courts?.name || "",
         bookingDate: format(startTimeSGT, "d MMM yyyy"),
         bookingTime: slotCount > 1 ? `${slotCount} time slots` : format(startTimeSGT, "h:mm a"),
       });
 
       // Update payment with HitPay details
-      payment = await prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          hitpayPaymentId: hitpayResponse.id,
-          hitpayPaymentUrl: hitpayResponse.url,
-        },
-      });
+      const { data: updatedPayment } = await supabase
+        .from('payments')
+        .update({
+          hitpay_payment_id: hitpayResponse.id,
+          hitpay_payment_url: hitpayResponse.url,
+        })
+        .eq('id', payment.id)
+        .select()
+        .single();
+
+      if (updatedPayment) {
+        payment = updatedPayment;
+      }
     } catch (error) {
       console.error("Failed to create HitPay payment:", error);
       // Continue with page render, will show error
@@ -110,12 +118,12 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
   }
 
   // Format slots for display
-  const formattedSlots = booking.slots.map((slot) => {
-    const startTimeSGT = toZonedTime(slot.startTime, TIMEZONE);
-    const endTimeSGT = toZonedTime(slot.endTime, TIMEZONE);
+  const formattedSlots = sortedSlots.map((slot) => {
+    const startTimeSGT = toZonedTime(slot.start_time, TIMEZONE);
+    const endTimeSGT = toZonedTime(slot.end_time, TIMEZONE);
     return {
       id: slot.id,
-      courtName: slot.court.name,
+      courtName: slot.courts?.name || "",
       date: format(startTimeSGT, "EEEE, d MMMM yyyy"),
       startTime: format(startTimeSGT, "h:mm a"),
       endTime: format(endTimeSGT, "h:mm a"),
@@ -131,11 +139,11 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
         id: booking.id,
         type: booking.type,
         slots: formattedSlots,
-        totalCents: booking.totalCents,
+        totalCents: booking.total_cents,
         currency: booking.currency,
-        expiresAt: booking.expiresAt?.toISOString() || null,
+        expiresAt: booking.expires_at || null,
       }}
-      paymentUrl={payment?.hitpayPaymentUrl || null}
+      paymentUrl={payment?.hitpay_payment_url || null}
       savedCard={savedCard}
     />
   );

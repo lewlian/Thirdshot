@@ -2,8 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { prisma } from "@/lib/prisma";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,40 +38,43 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('id, role')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     redirect("/login");
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: {
-      payment: true,
-      slots: {
-        include: { court: true },
-        orderBy: { startTime: "asc" },
-      },
-    },
-  });
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('*, payments(*), booking_slots(*, courts(*))')
+    .eq('id', bookingId)
+    .single();
 
   if (!booking) {
     notFound();
   }
 
   // Check ownership
-  if (booking.userId !== dbUser.id && dbUser.role !== "ADMIN") {
+  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
     notFound();
   }
 
-  const firstSlot = booking.slots[0];
-  const startTimeSGT = firstSlot ? toZonedTime(firstSlot.startTime, TIMEZONE) : new Date();
-  const totalDollars = (booking.totalCents / 100).toFixed(2);
+  const payment = booking.payments;
+  const sortedSlots = [...(booking.booking_slots || [])].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+  const firstSlot = sortedSlots[0];
+  const startTimeSGT = firstSlot ? toZonedTime(firstSlot.start_time, TIMEZONE) : new Date();
+  const totalDollars = (booking.total_cents / 100).toFixed(2);
   const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
 
-  const isUpcoming = firstSlot && new Date(firstSlot.startTime) > new Date();
+  const isUpcoming = firstSlot && new Date(firstSlot.start_time) > new Date();
   const canCancel = booking.status === "CONFIRMED" && isUpcoming;
   const isPending = booking.status === "PENDING_PAYMENT";
 
@@ -115,19 +117,19 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
               {bookingTypeLabel}
             </h3>
 
-            {booking.slots.map((slot, index) => {
-              const slotStartSGT = toZonedTime(slot.startTime, TIMEZONE);
-              const slotEndSGT = toZonedTime(slot.endTime, TIMEZONE);
+            {sortedSlots.map((slot, index) => {
+              const slotStartSGT = toZonedTime(slot.start_time, TIMEZONE);
+              const slotEndSGT = toZonedTime(slot.end_time, TIMEZONE);
 
               return (
                 <div key={slot.id} className="space-y-3 text-sm border-b pb-4 last:border-b-0">
-                  {booking.slots.length > 1 && (
+                  {sortedSlots.length > 1 && (
                     <div className="font-medium text-gray-900">Slot {index + 1}</div>
                   )}
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
                       <MapPin className="h-5 w-5 text-muted-foreground" />
-                      <span>{slot.court.name} - {slot.court.isIndoor ? "Indoor" : "Outdoor"}</span>
+                      <span>{slot.courts?.name} - {slot.courts?.is_indoor ? "Indoor" : "Outdoor"}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <Calendar className="h-5 w-5 text-muted-foreground" />
@@ -156,32 +158,32 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
               <span className="font-medium">${totalDollars} {booking.currency}</span>
 
               <span className="text-muted-foreground">Payment Status:</span>
-              <span>{booking.payment?.status || "N/A"}</span>
+              <span>{payment?.status || "N/A"}</span>
 
-              {booking.payment?.method && (
+              {payment?.method && (
                 <>
                   <span className="text-muted-foreground">Payment Method:</span>
-                  <span>{booking.payment.method}</span>
+                  <span>{payment.method}</span>
                 </>
               )}
 
-              {booking.payment?.paidAt && (
+              {payment?.paid_at && (
                 <>
                   <span className="text-muted-foreground">Paid At:</span>
-                  <span>{format(toZonedTime(booking.payment.paidAt, TIMEZONE), "d MMM yyyy, h:mm a")}</span>
+                  <span>{format(toZonedTime(payment.paid_at, TIMEZONE), "d MMM yyyy, h:mm a")}</span>
                 </>
               )}
             </div>
           </div>
 
           {/* Cancellation Reason */}
-          {(booking.status === "CANCELLED" || booking.status === "EXPIRED") && booking.cancelReason && (
+          {(booking.status === "CANCELLED" || booking.status === "EXPIRED") && booking.cancel_reason && (
             <div className="border-t pt-4 space-y-2">
               <h4 className="font-medium text-sm">Cancellation Reason</h4>
-              <p className="text-sm text-muted-foreground">{booking.cancelReason}</p>
-              {booking.cancelledAt && (
+              <p className="text-sm text-muted-foreground">{booking.cancel_reason}</p>
+              {booking.cancelled_at && (
                 <p className="text-xs text-muted-foreground">
-                  Cancelled on {format(toZonedTime(booking.cancelledAt, TIMEZONE), "d MMM yyyy, h:mm a")}
+                  Cancelled on {format(toZonedTime(booking.cancelled_at, TIMEZONE), "d MMM yyyy, h:mm a")}
                 </p>
               )}
             </div>
@@ -194,11 +196,11 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
               <span className="text-muted-foreground">Booking ID:</span>
               <code className="bg-muted px-2 py-0.5 rounded text-xs">{booking.id}</code>
             </div>
-            {booking.payment?.hitpayReferenceNo && (
+            {payment?.hitpay_reference_no && (
               <div className="flex items-center gap-2">
                 <span className="ml-6 text-muted-foreground">Payment Reference:</span>
                 <code className="bg-muted px-2 py-0.5 rounded text-xs">
-                  {booking.payment.hitpayReferenceNo}
+                  {payment.hitpay_reference_no}
                 </code>
               </div>
             )}

@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { TimeSlotGrid } from "@/components/booking/time-slot-grid";
 import { BookingSummary } from "@/components/booking/booking-summary";
 import { createBooking } from "@/lib/actions/booking";
-import type { Court } from "@prisma/client";
+import type { Court } from "@/types";
 import type { TimeSlot } from "@/types/court";
 import { ArrowLeft, ArrowRight, CalendarDays, Clock, Zap } from "lucide-react";
 import Link from "next/link";
@@ -135,9 +135,9 @@ export function CourtBookingForm({
     });
   };
 
-  const pricePerHour = (court.pricePerHourCents / 100).toFixed(0);
-  const peakPrice = court.peakPricePerHourCents
-    ? (court.peakPricePerHourCents / 100).toFixed(0)
+  const pricePerHour = (court.price_per_hour_cents / 100).toFixed(0);
+  const peakPrice = court.peak_price_per_hour_cents
+    ? (court.peak_price_per_hour_cents / 100).toFixed(0)
     : null;
 
   return (
@@ -146,13 +146,13 @@ export function CourtBookingForm({
       <Card className="card-elevated border-0 rounded-2xl">
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-2">
-            {court.surfaceType && (
+            {court.surface_type && (
               <div className="flex items-center gap-1.5 text-sm bg-secondary px-4 py-2 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                {court.surfaceType}
+                {court.surface_type}
               </div>
             )}
-            {court.hasLighting && (
+            {court.has_lighting && (
               <div className="flex items-center gap-1.5 text-sm bg-muted px-3 py-1.5 rounded-full">
                 <Zap className="h-3.5 w-3.5 text-amber-500" />
                 Lighting

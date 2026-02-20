@@ -1,28 +1,28 @@
 import { addHours, addDays } from 'date-fns';
 
-// Dynamically import to ensure env vars are loaded
 async function fixBookingsWithoutSlots() {
   // Load Next.js environment variables
   const { loadEnvConfig } = await import('@next/env');
   const projectDir = process.cwd();
   loadEnvConfig(projectDir);
 
-  // Now import prisma after env vars are loaded
-  const { prisma } = await import('../../src/lib/prisma');
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   console.log('Finding bookings without slots...');
 
-  // Find all bookings that have no slots
-  const bookingsWithoutSlots = await prisma.booking.findMany({
-    where: {
-      slots: {
-        none: {},
-      },
-    },
-    include: {
-      slots: true,
-    },
-  });
+  // Find all bookings
+  const { data: allBookings } = await supabase
+    .from('bookings')
+    .select('*, booking_slots(id)');
+
+  // Filter to those without slots
+  const bookingsWithoutSlots = (allBookings || []).filter(
+    (b) => !b.booking_slots || b.booking_slots.length === 0
+  );
 
   console.log(`Found ${bookingsWithoutSlots.length} bookings without slots`);
 
@@ -32,10 +32,13 @@ async function fixBookingsWithoutSlots() {
   }
 
   // Get the first available court
-  const court = await prisma.court.findFirst({
-    where: { isActive: true },
-    orderBy: { sortOrder: 'asc' },
-  });
+  const { data: court } = await supabase
+    .from('courts')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order')
+    .limit(1)
+    .single();
 
   if (!court) {
     console.error('No active court found!');
@@ -48,33 +51,30 @@ async function fixBookingsWithoutSlots() {
   for (const booking of bookingsWithoutSlots) {
     console.log(`\nFixing booking ${booking.id}...`);
     console.log(`  Status: ${booking.status}`);
-    console.log(`  Created: ${booking.createdAt}`);
+    console.log(`  Created: ${booking.created_at}`);
 
-    // Use the booking creation date + 1 day as the slot time
-    // This makes sense as a "past" booking
-    const slotStart = addDays(booking.createdAt, 1);
-    const slotEnd = addHours(slotStart, 1); // 1 hour slot
+    const slotStart = addDays(new Date(booking.created_at), 1);
+    const slotEnd = addHours(slotStart, 1);
 
     try {
-      await prisma.bookingSlot.create({
-        data: {
-          bookingId: booking.id,
-          courtId: court.id,
-          startTime: slotStart,
-          endTime: slotEnd,
-          priceInCents: booking.totalCents, // Use the booking's total as the slot price
-        },
-      });
+      const { error } = await supabase
+        .from('booking_slots')
+        .insert({
+          booking_id: booking.id,
+          court_id: court.id,
+          start_time: slotStart.toISOString(),
+          end_time: slotEnd.toISOString(),
+          price_in_cents: booking.total_cents,
+        });
 
-      console.log(`  ✓ Added slot: ${slotStart.toISOString()} - ${slotEnd.toISOString()}`);
+      if (error) throw error;
+      console.log(`  Added slot: ${slotStart.toISOString()} - ${slotEnd.toISOString()}`);
     } catch (error) {
-      console.error(`  ✗ Failed to add slot:`, error);
+      console.error(`  Failed to add slot:`, error);
     }
   }
 
-  console.log('\n✓ Done!');
-
-  await prisma.$disconnect();
+  console.log('\nDone!');
 }
 
 fixBookingsWithoutSlots()

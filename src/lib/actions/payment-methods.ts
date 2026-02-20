@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/supabase/server";
 import {
   createSaveCardSession,
@@ -43,29 +43,31 @@ export async function getSavedPaymentMethod(): Promise<SavedCardInfo | null> {
     return null;
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-    include: { savedPaymentMethod: true },
-  });
+  const supabase = await createServerSupabaseClient();
 
-  if (!dbUser?.savedPaymentMethod || !dbUser.savedPaymentMethod.isActive) {
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*, saved_payment_methods(*)')
+    .eq('supabase_id', user.id)
+    .single();
+
+  const savedMethod = dbUser?.saved_payment_methods;
+  if (!savedMethod || !savedMethod.is_active) {
     return null;
   }
 
-  const method = dbUser.savedPaymentMethod;
   return {
-    id: method.id,
-    cardBrand: method.cardBrand,
-    cardLast4: method.cardLast4,
-    cardExpiryMonth: method.cardExpiryMonth,
-    cardExpiryYear: method.cardExpiryYear,
-    isActive: method.isActive,
+    id: savedMethod.id,
+    cardBrand: savedMethod.card_brand,
+    cardLast4: savedMethod.card_last_4,
+    cardExpiryMonth: savedMethod.card_expiry_month,
+    cardExpiryYear: savedMethod.card_expiry_year,
+    isActive: savedMethod.is_active,
   };
 }
 
 /**
  * Initiate the save card flow
- * Creates a HitPay billing session and returns the redirect URL
  */
 export async function initiateSaveCard(): Promise<ActionResult> {
   const user = await getUser();
@@ -73,9 +75,13 @@ export async function initiateSaveCard(): Promise<ActionResult> {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found" };
@@ -111,31 +117,36 @@ export async function removeSavedPaymentMethod(): Promise<ActionResult> {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-    include: { savedPaymentMethod: true },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*, saved_payment_methods(*)')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found" };
   }
 
-  if (!dbUser.savedPaymentMethod) {
+  const savedMethod = dbUser.saved_payment_methods;
+  if (!savedMethod) {
     return { error: "No saved payment method found" };
   }
 
   try {
     // Delete from HitPay
-    await deleteSavedCard(dbUser.savedPaymentMethod.hitpayBillingId);
+    await deleteSavedCard(savedMethod.hitpay_billing_id);
   } catch (error) {
     console.error("Failed to delete card from HitPay:", error);
     // Continue with local deletion even if HitPay fails
   }
 
   // Delete from our database
-  await prisma.savedPaymentMethod.delete({
-    where: { id: dbUser.savedPaymentMethod.id },
-  });
+  await supabase
+    .from('saved_payment_methods')
+    .delete()
+    .eq('id', savedMethod.id);
 
   revalidatePath("/profile");
 
@@ -153,30 +164,35 @@ export async function chargeBookingWithSavedCard(
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-    include: { savedPaymentMethod: true },
-  });
+  const supabase = await createServerSupabaseClient();
+
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*, saved_payment_methods(*)')
+    .eq('supabase_id', user.id)
+    .single();
 
   if (!dbUser) {
     return { error: "User not found" };
   }
 
-  if (!dbUser.savedPaymentMethod || !dbUser.savedPaymentMethod.isActive) {
+  const savedMethod = dbUser.saved_payment_methods;
+  if (!savedMethod || !savedMethod.is_active) {
     return { error: "No saved payment method found" };
   }
 
   // Get the booking
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-    include: { payment: true },
-  });
+  const { data: booking } = await supabase
+    .from('bookings')
+    .select('*, payments(*)')
+    .eq('id', bookingId)
+    .single();
 
   if (!booking) {
     return { error: "Booking not found" };
   }
 
-  if (booking.userId !== dbUser.id) {
+  if (booking.user_id !== dbUser.id) {
     return { error: "Unauthorized" };
   }
 
@@ -187,28 +203,18 @@ export async function chargeBookingWithSavedCard(
   try {
     // Charge the saved card
     const chargeResult = await chargeSavedCard({
-      billingId: dbUser.savedPaymentMethod.hitpayBillingId,
-      amount: booking.totalCents / 100,
+      billingId: savedMethod.hitpay_billing_id,
+      amount: booking.total_cents / 100,
       currency: booking.currency,
     });
 
     if (chargeResult.status === "succeeded") {
-      // Update booking and payment
-      await prisma.$transaction([
-        prisma.booking.update({
-          where: { id: bookingId },
-          data: { status: "CONFIRMED" },
-        }),
-        prisma.payment.update({
-          where: { bookingId },
-          data: {
-            status: "COMPLETED",
-            method: "SAVED_CARD",
-            paidAt: new Date(),
-            hitpayPaymentId: chargeResult.payment_id,
-          },
-        }),
-      ]);
+      // Use RPC for atomic update
+      await supabase.rpc('confirm_booking_payment', {
+        p_booking_id: bookingId,
+        p_payment_method: 'SAVED_CARD',
+        p_hitpay_reference: chargeResult.payment_id || undefined,
+      });
 
       revalidatePath(`/bookings/${bookingId}`);
 
@@ -230,7 +236,6 @@ export async function chargeBookingWithSavedCard(
 
 /**
  * Refresh saved card details from HitPay
- * Used to sync card info if webhook was missed
  */
 export async function refreshSavedCardDetails(): Promise<ActionResult> {
   const user = await getUser();
@@ -238,29 +243,33 @@ export async function refreshSavedCardDetails(): Promise<ActionResult> {
     redirect("/login");
   }
 
-  const dbUser = await prisma.user.findUnique({
-    where: { supabaseId: user.id },
-    include: { savedPaymentMethod: true },
-  });
+  const supabase = await createServerSupabaseClient();
 
-  if (!dbUser?.savedPaymentMethod) {
+  const { data: dbUser } = await supabase
+    .from('users')
+    .select('*, saved_payment_methods(*)')
+    .eq('supabase_id', user.id)
+    .single();
+
+  const savedMethod = dbUser?.saved_payment_methods;
+  if (!savedMethod) {
     return { error: "No saved payment method found" };
   }
 
   try {
     const cardDetails = await getSavedCardDetails(
-      dbUser.savedPaymentMethod.hitpayBillingId
+      savedMethod.hitpay_billing_id
     );
 
-    await prisma.savedPaymentMethod.update({
-      where: { id: dbUser.savedPaymentMethod.id },
-      data: {
-        cardBrand: cardDetails.card_brand?.toLowerCase() || null,
-        cardLast4: cardDetails.card_last_four || null,
-        cardExpiryMonth: cardDetails.card_expiry_month || null,
-        cardExpiryYear: cardDetails.card_expiry_year || null,
-      },
-    });
+    await supabase
+      .from('saved_payment_methods')
+      .update({
+        card_brand: cardDetails.card_brand?.toLowerCase() || null,
+        card_last_4: cardDetails.card_last_four || null,
+        card_expiry_month: cardDetails.card_expiry_month || null,
+        card_expiry_year: cardDetails.card_expiry_year || null,
+      })
+      .eq('id', savedMethod.id);
 
     revalidatePath("/profile");
 

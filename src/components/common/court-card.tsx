@@ -9,16 +9,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sun, Lightbulb, Clock } from "lucide-react";
-import type { Court } from "@prisma/client";
+import type { Court } from "@/types";
 
 interface CourtCardProps {
   court: Court;
 }
 
 export function CourtCard({ court }: CourtCardProps) {
-  const pricePerHour = (court.pricePerHourCents / 100).toFixed(0);
-  const peakPrice = court.peakPricePerHourCents
-    ? (court.peakPricePerHourCents / 100).toFixed(0)
+  const pricePerHour = (court.price_per_hour_cents / 100).toFixed(0);
+  const peakPrice = court.peak_price_per_hour_cents
+    ? (court.peak_price_per_hour_cents / 100).toFixed(0)
     : null;
 
   return (
@@ -31,7 +31,7 @@ export function CourtCard({ court }: CourtCardProps) {
               {court.description}
             </CardDescription>
           </div>
-          {court.isIndoor ? (
+          {court.is_indoor ? (
             <Badge className="bg-primary/10 text-primary hover:bg-primary/10 border-0 rounded-full px-3 py-1 text-xs font-medium">
               Indoor
             </Badge>
@@ -45,13 +45,13 @@ export function CourtCard({ court }: CourtCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-          {court.surfaceType && (
+          {court.surface_type && (
             <span className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              {court.surfaceType}
+              {court.surface_type}
             </span>
           )}
-          {court.hasLighting && (
+          {court.has_lighting && (
             <span className="flex items-center gap-1.5">
               <Lightbulb className="h-3.5 w-3.5 text-amber-500" />
               Lighting
@@ -59,7 +59,7 @@ export function CourtCard({ court }: CourtCardProps) {
           )}
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
-            {court.openTime} - {court.closeTime}
+            {court.open_time} - {court.close_time}
           </span>
         </div>
 

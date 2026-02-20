@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
-import type { Court } from "@prisma/client";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { Court } from "@/types";
 import type { BookingPriceBreakdown } from "@/types/booking";
 import { addHours } from "date-fns";
 
@@ -8,7 +8,7 @@ export async function calculateBookingPrice(
   startTime: Date,
   slots: number
 ): Promise<BookingPriceBreakdown> {
-  const slotDurationHours = court.slotDurationMinutes / 60;
+  const slotDurationHours = court.slot_duration_minutes / 60;
   const breakdown: BookingPriceBreakdown = {
     slots: [],
     totalCents: 0,
@@ -22,9 +22,9 @@ export async function calculateBookingPrice(
     const isPeak = isPeakTime(currentStart);
 
     const priceInCents =
-      isPeak && court.peakPricePerHourCents
-        ? court.peakPricePerHourCents
-        : court.pricePerHourCents;
+      isPeak && court.peak_price_per_hour_cents
+        ? court.peak_price_per_hour_cents
+        : court.price_per_hour_cents;
 
     breakdown.slots.push({
       startTime: currentStart,
@@ -54,8 +54,13 @@ function isPeakTime(date: Date): boolean {
 }
 
 export async function getAppSettings() {
-  const settings = await prisma.appSetting.findMany();
-  return settings.reduce(
+  const supabase = await createServerSupabaseClient();
+
+  const { data: settings } = await supabase
+    .from('app_settings')
+    .select('*');
+
+  return (settings || []).reduce(
     (acc, setting) => {
       acc[setting.key] = setting.value;
       return acc;
