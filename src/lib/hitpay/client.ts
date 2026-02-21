@@ -6,6 +6,7 @@ import type {
   HitPayEnvironment,
   WebhookPayload,
 } from "./types";
+import { getAppUrl } from "@/lib/utils";
 
 const API_URLS: Record<HitPayEnvironment, string> = {
   sandbox: "https://api.sandbox.hit-pay.com/v1",
@@ -171,7 +172,7 @@ export async function createBookingPayment(params: {
   bookingDate: string;
   bookingTime: string;
 }): Promise<CreatePaymentResponse> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   const paymentData: CreatePaymentRequest = {
     amount: params.amountCents / 100, // Convert cents to dollars

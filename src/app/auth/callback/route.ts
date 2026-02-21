@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
 import { syncUserFromSupabase } from "@/lib/actions/auth";
 
 export async function GET(request: Request) {
@@ -9,7 +11,29 @@ export async function GET(request: Request) {
   const type = searchParams.get("type");
 
   if (code) {
-    const supabase = await createServerSupabaseClient();
+    const cookieStore = await cookies();
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              );
+            } catch {
+              // Cookies can't be set in read-only contexts
+            }
+          },
+        },
+      }
+    );
+
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
@@ -26,13 +50,10 @@ export async function GET(request: Request) {
         });
       }
 
-      // If this is a password recovery flow, redirect to reset password page
-      if (type === "recovery") {
-        return NextResponse.redirect(`${origin}/reset-password`);
-      }
-
-      // Otherwise, redirect to the next page (default: home)
-      return NextResponse.redirect(`${origin}${next}`);
+      // Use redirect() instead of NextResponse.redirect() so that
+      // cookies set via cookieStore.set() are included in the response
+      const redirectPath = type === "recovery" ? "/reset-password" : next;
+      redirect(redirectPath);
     }
   }
 

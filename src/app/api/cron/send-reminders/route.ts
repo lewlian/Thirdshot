@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { sendBookingReminderEmail } from "@/lib/email/send";
 import { addHours } from "date-fns";
+import { getAppUrl } from "@/lib/utils";
 
 /**
  * Cron endpoint to send booking reminder emails
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
         }
 
         const courtName = firstSlot.courts.name;
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+        const appUrl = getAppUrl();
         const bookingUrl = `${appUrl}/bookings/${booking.id}`;
 
         const emailSent = await sendBookingReminderEmail({

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
+import { getAppUrl } from "@/lib/utils";
 import {
   checkRateLimit,
   getRateLimitStatus,
@@ -137,6 +138,7 @@ export async function signup(formData: FormData): Promise<AuthActionResult> {
   await supabase
     .from('users')
     .insert({
+      id: crypto.randomUUID(),
       email: parsed.data.email,
       name: parsed.data.name,
       supabase_id: data.user.id,
@@ -152,7 +154,7 @@ export async function signInWithGoogle(): Promise<void> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      redirectTo: `${getAppUrl()}/auth/callback`,
     },
   });
 
@@ -197,6 +199,7 @@ export async function syncUserFromSupabase(supabaseUser: {
   const { data: newUser } = await supabase
     .from('users')
     .insert({
+      id: crypto.randomUUID(),
       email: supabaseUser.email || "",
       name: supabaseUser.user_metadata?.name || null,
       avatar_url: supabaseUser.user_metadata?.avatar_url || null,

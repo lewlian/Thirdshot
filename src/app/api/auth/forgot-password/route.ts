@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getAppUrl } from "@/lib/utils";
 
 // Simple in-memory rate limiting (for development)
 // For production, use Redis/Upstash
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // Send password reset email via Supabase
     const supabase = await createServerSupabaseClient();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${appUrl}/reset-password`,

@@ -14,7 +14,7 @@ export default async function BookingsPage() {
 
   const supabase = await createServerSupabaseClient();
 
-  const { data: dbUser } = await supabase
+  const { data: dbUser, error: dbError } = await supabase
     .from('users')
     .select('id')
     .eq('supabase_id', user.id)

@@ -10,6 +10,7 @@ import {
   chargeSavedCard,
   deleteSavedCard,
 } from "@/lib/hitpay/recurring";
+import { getAppUrl } from "@/lib/utils";
 
 // ============================================
 // Types
@@ -87,7 +88,7 @@ export async function initiateSaveCard(): Promise<ActionResult> {
     return { error: "User not found" };
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   try {
     const session = await createSaveCardSession({
