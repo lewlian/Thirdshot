@@ -3,6 +3,7 @@ import { addDays, startOfDay, endOfDay, setHours, setMinutes, isBefore, isAfter 
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import type { TimeSlot } from "@/types/court";
 import type { Court } from "@/types";
+import { expireStaleBookings } from "./expire-stale-bookings";
 
 const TIMEZONE = "Asia/Singapore";
 
@@ -13,6 +14,9 @@ export async function getCourtAvailability(
   courtId: string,
   date: Date
 ): Promise<TimeSlot[]> {
+  // Expire any stale pending bookings before checking availability
+  await expireStaleBookings();
+
   const supabase = await createServerSupabaseClient();
 
   const { data: court } = await supabase
@@ -174,6 +178,9 @@ export async function checkSlotAvailability(
   startTime: Date,
   endTime: Date
 ): Promise<{ available: boolean; reason?: string }> {
+  // Expire any stale pending bookings before checking
+  await expireStaleBookings();
+
   const supabase = await createServerSupabaseClient();
 
   // Check if court exists and is active
