@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { getUserOrgs } from "@/lib/org-context";
 import Link from "next/link";
-import { Suspense } from "react";
 
 export default async function DashboardPage() {
   const supabaseUser = await getUser();
@@ -11,7 +10,7 @@ export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
   const { data: dbUser } = await supabase
     .from("users")
-    .select("id, name, email")
+    .select("id, name, email, role")
     .eq("supabase_id", supabaseUser.id)
     .single();
 
@@ -35,14 +34,16 @@ export default async function DashboardPage() {
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold mb-4">No organizations yet</h2>
             <p className="text-muted-foreground mb-6">
-              Create your first organization to get started with Thirdshot.
+              You haven&apos;t been added to any organizations yet. Please contact your administrator to get access.
             </p>
-            <Link
-              href="/create-org"
-              className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6"
-            >
-              Create Organization
-            </Link>
+            {dbUser.role === "ADMIN" && (
+              <Link
+                href="/create-org"
+                className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-6"
+              >
+                Create Organization
+              </Link>
+            )}
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -73,12 +74,14 @@ export default async function DashboardPage() {
                 </Link>
               );
             })}
-            <Link
-              href="/create-org"
-              className="flex items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary transition-colors text-muted-foreground hover:text-foreground"
-            >
-              + Create New Organization
-            </Link>
+            {dbUser.role === "ADMIN" && (
+              <Link
+                href="/create-org"
+                className="flex items-center justify-center p-6 rounded-lg border-2 border-dashed border-border hover:border-primary transition-colors text-muted-foreground hover:text-foreground"
+              >
+                + Create New Organization
+              </Link>
+            )}
           </div>
         )}
       </div>

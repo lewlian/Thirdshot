@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
-import { Menu, X, Shield } from "lucide-react";
+import { Menu, X, Shield, Plus } from "lucide-react";
 import { useState } from "react";
 
 interface HeaderProps {
   user: User | null;
   isAdmin?: boolean;
+  isSuperAdmin?: boolean;
   orgSlug?: string;
 }
 
-export function Header({ user, isAdmin = false, orgSlug }: HeaderProps) {
+export function Header({ user, isAdmin = false, isSuperAdmin = false, orgSlug }: HeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -26,6 +27,7 @@ export function Header({ user, isAdmin = false, orgSlug }: HeaderProps) {
     ...(!orgSlug ? [{ href: "/courts", label: "Courts" }] : []),
     ...(user ? [{ href: `${prefix}/bookings`, label: "My Bookings" }] : []),
     ...(isAdmin ? [{ href: `${prefix}/admin`, label: "Admin", icon: Shield }] : []),
+    ...(isSuperAdmin ? [{ href: "/create-org", label: "Create Org", icon: Plus }] : []),
   ];
 
   const isActive = (href: string) => {

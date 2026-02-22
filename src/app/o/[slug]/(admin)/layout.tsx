@@ -3,6 +3,7 @@ import { getOrgBySlug } from "@/lib/org-context";
 import { requireOrgRole } from "@/lib/permissions";
 import { getCurrentDbUser } from "@/lib/org-context";
 import { AdminNav } from "./admin-nav";
+import { Plus } from "lucide-react";
 
 export default async function AdminLayout({
   children,
@@ -16,6 +17,7 @@ export default async function AdminLayout({
   const { userId } = await requireOrgRole(org.id, "admin");
 
   const dbUser = await getCurrentDbUser();
+  const isSuperAdmin = dbUser?.role === "ADMIN";
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,6 +38,15 @@ export default async function AdminLayout({
               </span>
             </div>
             <div className="flex items-center gap-4">
+              {isSuperAdmin && (
+                <Link
+                  href="/create-org"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Org
+                </Link>
+              )}
               <Link
                 href={`/o/${slug}/courts`}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"

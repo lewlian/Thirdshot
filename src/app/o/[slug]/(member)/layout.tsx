@@ -17,23 +17,25 @@ export default async function MemberLayout({
   const supabaseUser = await getUser();
 
   let isAdmin = false;
+  let isSuperAdmin = false;
   if (supabaseUser) {
     const supabase = await createServerSupabaseClient();
     const { data: dbUser } = await supabase
       .from("users")
-      .select("id")
+      .select("id, role")
       .eq("supabase_id", supabaseUser.id)
       .single();
 
     if (dbUser) {
-      const role = await getUserOrgRole(dbUser.id, org.id);
-      isAdmin = role === "owner" || role === "admin";
+      const orgRole = await getUserOrgRole(dbUser.id, org.id);
+      isAdmin = orgRole === "owner" || orgRole === "admin";
+      isSuperAdmin = dbUser.role === "ADMIN";
     }
   }
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header user={supabaseUser} isAdmin={isAdmin} orgSlug={slug} />
+      <Header user={supabaseUser} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} orgSlug={slug} />
       <main className="flex-1 pb-16 md:pb-0">{children}</main>
       <Footer />
       <MobileBottomNav orgSlug={slug} />

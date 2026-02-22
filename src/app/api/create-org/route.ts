@@ -40,6 +40,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const supabase = await createServerSupabaseClient();
+
+    // Check super admin (platform-level ADMIN role)
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("id, role")
+      .eq("supabase_id", supabaseUser.id)
+      .single();
+
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: "User profile not found" },
+        { status: 404 }
+      );
+    }
+
+    if (dbUser.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Only platform administrators can create organizations" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const parsed = createOrgSchema.safeParse(body);
 
@@ -51,7 +74,6 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
-    const supabase = await createServerSupabaseClient();
 
     // Check slug uniqueness
     const { data: existing } = await supabase
@@ -64,20 +86,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "This URL slug is already taken" },
         { status: 409 }
-      );
-    }
-
-    // Get the DB user
-    const { data: dbUser } = await supabase
-      .from("users")
-      .select("id")
-      .eq("supabase_id", supabaseUser.id)
-      .single();
-
-    if (!dbUser) {
-      return NextResponse.json(
-        { error: "User profile not found" },
-        { status: 404 }
       );
     }
 
