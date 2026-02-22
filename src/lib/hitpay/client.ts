@@ -171,6 +171,7 @@ export async function createBookingPayment(params: {
   courtName: string;
   bookingDate: string;
   bookingTime: string;
+  orgSlug: string;
 }): Promise<CreatePaymentResponse> {
   const appUrl = getAppUrl();
 
@@ -181,7 +182,7 @@ export async function createBookingPayment(params: {
     name: params.userName,
     purpose: `Court booking: ${params.courtName} on ${params.bookingDate} at ${params.bookingTime}`,
     reference_number: params.bookingId,
-    redirect_url: `${appUrl}/bookings/${params.bookingId}/confirmation`,
+    redirect_url: `${appUrl}/o/${params.orgSlug}/bookings/${params.bookingId}/confirmation`,
     webhook: `${appUrl}/api/webhooks/hitpay`,
   };
 

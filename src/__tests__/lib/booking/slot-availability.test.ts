@@ -80,7 +80,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      const result = await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(result.available).toBe(true);
     });
   });
@@ -95,7 +95,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      const result = await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(result.available).toBe(false);
       expect(result.reason).toBe("Slot is already booked");
     });
@@ -109,7 +109,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      const result = await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(result.available).toBe(false);
       expect(result.reason).toBe("Court is blocked during this time");
     });
@@ -120,7 +120,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      const result = await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(result.available).toBe(false);
       expect(result.reason).toBe("Court not available");
     });
@@ -131,7 +131,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      const result = await checkSlotAvailability(courtId, startTime, endTime);
+      const result = await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(result.available).toBe(false);
       expect(result.reason).toBe("Court not available");
     });
@@ -148,7 +148,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      const result = await checkSlotAvailability(courtId, pastStart, pastEnd);
+      const result = await checkSlotAvailability(courtId, pastStart, pastEnd, "test-org");
       expect(result.available).toBe(false);
       expect(result.reason).toBe("Cannot book slots in the past");
     });
@@ -171,7 +171,8 @@ describe("checkSlotAvailability", () => {
       const result = await checkSlotAvailability(
         courtId,
         farFuture,
-        farFutureEnd
+        farFutureEnd,
+        "test-org"
       );
       expect(result.available).toBe(false);
       expect(result.reason).toBe("Slot is outside booking window");
@@ -188,7 +189,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      await checkSlotAvailability(courtId, startTime, endTime);
+      await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(mock.from).toHaveBeenCalledWith("booking_slots");
     });
 
@@ -201,7 +202,7 @@ describe("checkSlotAvailability", () => {
       });
       (createServerSupabaseClient as jest.Mock).mockResolvedValue(mock);
 
-      await checkSlotAvailability(courtId, startTime, endTime);
+      await checkSlotAvailability(courtId, startTime, endTime, "test-org");
       expect(mock.from).toHaveBeenCalledWith("court_blocks");
     });
   });

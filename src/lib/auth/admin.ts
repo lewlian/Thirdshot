@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 
 /**
  * Check if the current user is an admin
+ * When orgId is provided, checks org membership role instead of global role.
  * Returns the user if admin, null otherwise
  */
-export async function getAdminUser() {
+export async function getAdminUser(orgId?: string) {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user: supabaseUser },
@@ -21,11 +22,40 @@ export async function getAdminUser() {
     .eq('supabase_id', supabaseUser.id)
     .single();
 
-  if (!user || user.role !== "ADMIN") {
+  if (!user) {
+    return null;
+  }
+
+  // If orgId is provided, check org membership role
+  if (orgId) {
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('organization_id', orgId)
+      .single();
+
+    if (!membership || !['admin', 'owner'].includes(membership.role)) {
+      return null;
+    }
+
+    return user;
+  }
+
+  // Fallback: check global role for backward compatibility
+  if (user.role !== "ADMIN") {
     return null;
   }
 
   return user;
+}
+
+/**
+ * Check if the current user has admin/owner role in the specified org.
+ * Returns the user if they have admin or owner role, null otherwise.
+ */
+export async function getOrgAdmin(orgId: string) {
+  return getAdminUser(orgId);
 }
 
 /**

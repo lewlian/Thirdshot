@@ -24,6 +24,7 @@ const courtBlockSchema = z.object({
 // Create audit log entry
 async function createAuditLog(
   adminId: string,
+  orgId: string,
   action: string,
   entityType: string,
   entityId: string,
@@ -39,6 +40,7 @@ async function createAuditLog(
     .from('admin_audit_logs')
     .insert({
       admin_id: adminId,
+      organization_id: orgId,
       action,
       entity_type: entityType,
       entity_id: entityId,
@@ -53,6 +55,11 @@ export async function createCourt(formData: FormData) {
   const admin = await getAdminUser();
   if (!admin) {
     return { success: false, error: "Unauthorized" };
+  }
+
+  const orgId = formData.get("orgId") as string;
+  if (!orgId) {
+    return { success: false, error: "Organization ID is required" };
   }
 
   const data = {
@@ -79,13 +86,14 @@ export async function createCourt(formData: FormData) {
         description: parsed.data.description,
         price_per_hour_cents: parsed.data.pricePerHourCents,
         is_active: parsed.data.isActive,
+        organization_id: orgId,
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "CREATE", "Court", court.id, {
+    await createAuditLog(admin.id, orgId, "CREATE", "Court", court.id, {
       newData: { name: court.name },
     });
 
@@ -103,6 +111,11 @@ export async function updateCourt(courtId: string, formData: FormData) {
   const admin = await getAdminUser();
   if (!admin) {
     return { success: false, error: "Unauthorized" };
+  }
+
+  const orgId = formData.get("orgId") as string;
+  if (!orgId) {
+    return { success: false, error: "Organization ID is required" };
   }
 
   const data = {
@@ -131,12 +144,13 @@ export async function updateCourt(courtId: string, formData: FormData) {
         is_active: parsed.data.isActive,
       })
       .eq('id', courtId)
+      .eq('organization_id', orgId)
       .select()
       .single();
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "UPDATE", "Court", court.id, {
+    await createAuditLog(admin.id, orgId, "UPDATE", "Court", court.id, {
       newData: { name: court.name, changes: data },
     });
 
@@ -150,7 +164,7 @@ export async function updateCourt(courtId: string, formData: FormData) {
   }
 }
 
-export async function deleteCourt(courtId: string) {
+export async function deleteCourt(courtId: string, orgId: string) {
   const admin = await getAdminUser();
   if (!admin) {
     return { success: false, error: "Unauthorized" };
@@ -177,12 +191,13 @@ export async function deleteCourt(courtId: string) {
       .from('courts')
       .delete()
       .eq('id', courtId)
+      .eq('organization_id', orgId)
       .select()
       .single();
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "DELETE", "Court", courtId, {
+    await createAuditLog(admin.id, orgId, "DELETE", "Court", courtId, {
       previousData: { name: court.name },
     });
 
@@ -201,6 +216,11 @@ export async function createCourtBlock(formData: FormData) {
   const admin = await getAdminUser();
   if (!admin) {
     return { success: false, error: "Unauthorized" };
+  }
+
+  const orgId = formData.get("orgId") as string;
+  if (!orgId) {
+    return { success: false, error: "Organization ID is required" };
   }
 
   const data = {
@@ -247,13 +267,14 @@ export async function createCourtBlock(formData: FormData) {
         end_time: parsed.data.endTime.toISOString(),
         reason: parsed.data.reason,
         created_by_id: admin.id,
+        organization_id: orgId,
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "CREATE", "CourtBlock", block.id, {
+    await createAuditLog(admin.id, orgId, "CREATE", "CourtBlock", block.id, {
       newData: {
         courtId: parsed.data.courtId,
         startTime: parsed.data.startTime.toISOString(),
@@ -272,7 +293,7 @@ export async function createCourtBlock(formData: FormData) {
   }
 }
 
-export async function deleteCourtBlock(blockId: string) {
+export async function deleteCourtBlock(blockId: string, orgId: string) {
   const admin = await getAdminUser();
   if (!admin) {
     return { success: false, error: "Unauthorized" };
@@ -290,7 +311,7 @@ export async function deleteCourtBlock(blockId: string) {
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "DELETE", "CourtBlock", blockId, {
+    await createAuditLog(admin.id, orgId, "DELETE", "CourtBlock", blockId, {
       previousData: { courtId: block.court_id },
     });
 
@@ -305,7 +326,7 @@ export async function deleteCourtBlock(blockId: string) {
 }
 
 // Admin booking management
-export async function adminCancelBooking(bookingId: string, reason?: string) {
+export async function adminCancelBooking(bookingId: string, reason?: string, orgId?: string) {
   const admin = await getAdminUser();
   if (!admin) {
     return { success: false, error: "Unauthorized" };
@@ -327,7 +348,8 @@ export async function adminCancelBooking(bookingId: string, reason?: string) {
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "CANCEL", "Booking", bookingId, {
+    const resolvedOrgId = orgId || booking.organization_id;
+    await createAuditLog(admin.id, resolvedOrgId, "CANCEL", "Booking", bookingId, {
       newData: {
         reason,
         userId: booking.user_id,
@@ -347,7 +369,8 @@ export async function adminCancelBooking(bookingId: string, reason?: string) {
 // User management
 export async function updateUserRole(
   userId: string,
-  role: "USER" | "ADMIN"
+  role: "USER" | "ADMIN",
+  orgId: string
 ) {
   const admin = await getAdminUser();
   if (!admin) {
@@ -371,7 +394,7 @@ export async function updateUserRole(
 
     if (error) throw error;
 
-    await createAuditLog(admin.id, "UPDATE_ROLE", "User", userId, {
+    await createAuditLog(admin.id, orgId, "UPDATE_ROLE", "User", userId, {
       newData: { newRole: role },
     });
 

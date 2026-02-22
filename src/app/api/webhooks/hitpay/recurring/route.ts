@@ -101,7 +101,7 @@ function verifyRecurringWebhookSignature(
  * Handle successful card save
  */
 async function handleCardSaved(payload: RecurringWebhookPayload) {
-  const { recurring_billing_id, customer_email, card_brand, card_last_four, card_expiry_month, card_expiry_year } = payload;
+  const { recurring_billing_id, customer_email, card_brand, card_last_four, card_expiry_month, card_expiry_year, reference } = payload;
 
   const adminClient = createAdminSupabaseClient();
 
@@ -117,11 +117,45 @@ async function handleCardSaved(payload: RecurringWebhookPayload) {
     return;
   }
 
-  // Check if user already has a saved payment method
+  // Determine organization_id from the associated booking (via reference) or user's membership
+  let organizationId: string | null = null;
+
+  if (reference) {
+    const { data: booking } = await adminClient
+      .from('bookings')
+      .select('organization_id')
+      .eq('id', reference)
+      .single();
+    if (booking) {
+      organizationId = booking.organization_id;
+    }
+  }
+
+  if (!organizationId) {
+    // Fallback: get org from user's most recent booking
+    const { data: recentBooking } = await adminClient
+      .from('bookings')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    if (recentBooking) {
+      organizationId = recentBooking.organization_id;
+    }
+  }
+
+  if (!organizationId) {
+    console.error(`No organization found for user: ${user.id}`);
+    return;
+  }
+
+  // Check if user already has a saved payment method for this org
   const { data: existingMethod } = await adminClient
     .from('saved_payment_methods')
     .select('*')
     .eq('user_id', user.id)
+    .eq('organization_id', organizationId)
     .single();
 
   if (existingMethod) {
@@ -136,12 +170,13 @@ async function handleCardSaved(payload: RecurringWebhookPayload) {
         card_expiry_year: card_expiry_year || null,
         is_active: true,
       })
-      .eq('user_id', user.id);
+      .eq('id', existingMethod.id);
   } else {
     // Create new saved payment method
     await adminClient
       .from('saved_payment_methods')
       .insert({
+        organization_id: organizationId,
         user_id: user.id,
         hitpay_billing_id: recurring_billing_id,
         card_brand: card_brand?.toLowerCase() || null,

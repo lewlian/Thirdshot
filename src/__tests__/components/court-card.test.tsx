@@ -7,6 +7,7 @@ import { CourtCard } from "@/components/common/court-card";
 
 const mockCourt = {
   id: "court-1",
+  organization_id: "test-org",
   name: "Court A",
   description: "Indoor court with premium surface",
   is_active: true,

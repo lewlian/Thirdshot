@@ -53,12 +53,13 @@ function isPeakTime(date: Date): boolean {
   return hour >= 18 && hour < 21;
 }
 
-export async function getAppSettings() {
+export async function getAppSettings(orgId: string) {
   const supabase = await createServerSupabaseClient();
 
   const { data: settings } = await supabase
     .from('app_settings')
-    .select('*');
+    .select('*')
+    .eq('organization_id', orgId);
 
   return (settings || []).reduce(
     (acc, setting) => {

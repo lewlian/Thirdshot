@@ -1,40 +1,48 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-// Routes that require authentication
-const protectedRoutes = ["/bookings", "/profile"];
-
 // Routes only for unauthenticated users
 const authRoutes = ["/login", "/signup"];
-
-// Routes only for admins
-const adminRoutes = ["/admin"];
 
 export async function middleware(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  // Check if accessing protected routes without auth
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-  const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+  const isAuthRoute = authRoutes.some((r) => pathname.startsWith(r));
 
-  // Redirect unauthenticated users from protected routes to login
-  if ((isProtectedRoute || isAdminRoute) && !user) {
+  // Redirect authenticated users away from auth routes
+  if (isAuthRoute && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  // Protected platform routes (not org-scoped)
+  if ((pathname === "/dashboard" || pathname.startsWith("/create-org")) && !user) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Org-scoped member/admin routes require auth
+  // Public routes like /o/{slug}/book don't require auth
+  const orgMemberMatch = pathname.match(/^\/o\/[^/]+\/(bookings|profile|courts)/);
+  const orgAdminMatch = pathname.match(/^\/o\/[^/]+\/admin/);
+
+  if ((orgMemberMatch || orgAdminMatch) && !user) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Redirect authenticated users from auth routes to home
-  if (isAuthRoute && user) {
-    return NextResponse.redirect(new URL("/", request.url));
+  // Legacy route redirects: /courts, /bookings, /profile, /admin → /dashboard
+  // (dashboard will resolve the user's org and redirect)
+  const legacyRoutes = ["/courts", "/bookings", "/profile", "/admin"];
+  const isLegacyRoute = legacyRoutes.some(
+    (r) => pathname === r || pathname.startsWith(r + "/")
+  );
+  if (isLegacyRoute && !pathname.startsWith("/o/")) {
+    if (!user) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-
-  // Note: Admin role check is done in the admin layout/pages
-  // since we need to query the database for user role
 
   return response;
 }
@@ -47,7 +55,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
-     * - api routes (handled separately)
      */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],

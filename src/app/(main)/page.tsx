@@ -1,117 +1,66 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { CourtCard } from "@/components/common/court-card";
-import { CalendarAvailability } from "@/components/booking/calendar-availability";
-import { ProgramsSection } from "@/components/home/programs-section";
-import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
-import { getCalendarAvailability } from "@/lib/booking/aggregated-availability";
-import {
-  CalendarDays,
-  Clock,
-  MapPin,
-  Zap,
-  Shield,
+  Calendar,
   Users,
-  ArrowRight,
+  CreditCard,
+  BarChart3,
+  Globe,
+  Shield,
 } from "lucide-react";
-import { format } from "date-fns";
-import { toZonedTime } from "date-fns-tz";
-import { Badge } from "@/components/ui/badge";
 
-const TIMEZONE = "Asia/Singapore";
+const features = [
+  {
+    icon: Calendar,
+    title: "Smart Booking",
+    description:
+      "Real-time court availability, configurable time slots, and automatic conflict prevention.",
+  },
+  {
+    icon: Users,
+    title: "Member Management",
+    description:
+      "Membership tiers, role-based access, guest bookings, and member directories.",
+  },
+  {
+    icon: CreditCard,
+    title: "Payments & Billing",
+    description:
+      "Integrated payments, recurring subscriptions, invoicing, and automated billing.",
+  },
+  {
+    icon: BarChart3,
+    title: "Financial Reporting",
+    description:
+      "Revenue dashboards, member growth analytics, and court utilization insights.",
+  },
+  {
+    icon: Globe,
+    title: "Public Booking Pages",
+    description:
+      "Shareable booking links for guests. No account required to book a court.",
+  },
+  {
+    icon: Shield,
+    title: "Multi-Tenant Platform",
+    description:
+      "Each club gets its own branded space with isolated data and custom settings.",
+  },
+];
 
-type BookingType = "COURT_BOOKING" | "CORPORATE_BOOKING" | "PRIVATE_COACHING";
-
-const typeConfig: Record<BookingType, string> = {
-  COURT_BOOKING: "Court Booking",
-  CORPORATE_BOOKING: "Corporate Booking",
-  PRIVATE_COACHING: "Private Coaching",
-};
-
-export default async function HomePage() {
-  const user = await getUser();
-  const supabase = await createServerSupabaseClient();
-
-  // Fetch courts
-  const { data: courts } = await supabase
-    .from('courts')
-    .select('*')
-    .eq('is_active', true)
-    .order('sort_order')
-    .limit(4);
-
-  // Fetch calendar availability (7 bookable days + 1 extra day)
-  const calendarAvailability = await getCalendarAvailability(true);
-
-  // Fetch user's upcoming bookings if logged in
-  let upcomingBookings: Array<{
-    id: string;
-    status: string;
-    type: string;
-    created_at: string;
-    booking_slots: Array<{
-      id: string;
-      start_time: string;
-      end_time: string;
-      courts: { name: string } | null;
-    }>;
-  }> = [];
-
-  if (user) {
-    const { data: dbUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('supabase_id', user.id)
-      .single();
-
-    if (dbUser) {
-      // Fetch recent bookings with slots, then filter for upcoming in JS
-      const { data: bookings } = await supabase
-        .from('bookings')
-        .select('*, booking_slots(*, courts(*))')
-        .eq('user_id', dbUser.id)
-        .in('status', ['CONFIRMED', 'PENDING_PAYMENT'])
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (bookings) {
-        const now = new Date();
-        upcomingBookings = bookings
-          .filter((b) =>
-            b.booking_slots?.some(
-              (slot) => new Date(slot.start_time) >= now
-            )
-          )
-          .slice(0, 3);
-      }
-    }
-  }
-
+export default function HomePage() {
   return (
     <div className="min-h-screen">
-      {/* Hero Section with Singapore Airlines inspired design */}
-      <section className="relative overflow-hidden gradient-blue-bg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 relative">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-primary to-primary/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32 relative">
           <div className="text-center max-w-3xl mx-auto text-white">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white px-5 py-2.5 rounded-full text-sm font-medium mb-8 border border-white/20">
-              <Zap className="h-4 w-4" />
-              Singapore's Premier Pickleball Facility
-            </div>
             <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6">
-              Book Your Court.
-              <br />
-              Game On.
+              Court booking software for pickleball clubs
             </h1>
             <p className="text-lg md:text-xl text-white/90 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Real-time availability. Instant booking. Premium courts. Join the
-              fastest growing sport in Singapore.
+              Manage courts, bookings, and members all in one place. Real-time
+              availability, instant booking, and seamless payments.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button
@@ -119,188 +68,90 @@ export default async function HomePage() {
                 className="rounded-full bg-white text-primary hover:bg-white/95 text-lg px-10 h-14 font-semibold shadow-lg"
                 asChild
               >
-                <Link href="/courts">
-                  Book Now
-                </Link>
+                <Link href="/signup">Get Started Free</Link>
               </Button>
-              {!user && (
-                <Button
-                  size="lg"
-                  className="rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border border-white/30 text-lg px-10 h-14 font-semibold"
-                  asChild
-                >
-                  <Link href="/signup">Create Account</Link>
-                </Button>
-              )}
+              <Button
+                size="lg"
+                className="rounded-full bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border border-white/30 text-lg px-10 h-14 font-semibold"
+                asChild
+              >
+                <Link href="/login">Login</Link>
+              </Button>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Calendar Availability */}
-        <section className="py-12">
-          <CalendarAvailability availability={calendarAvailability} />
-        </section>
-
-        {/* Programs & Services */}
-        <section className="py-12 border-t border-gray-200">
-          <ProgramsSection />
-        </section>
-
-        {/* Upcoming Bookings (for logged in users) */}
-        {user && upcomingBookings.length > 0 && (
-          <section className="py-12">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-2xl font-bold">Your Upcoming Games</h2>
-                <p className="text-muted-foreground">
-                  Ready to play? Here&apos;s what&apos;s coming up.
-                </p>
-              </div>
-              <Button variant="ghost" className="rounded-full" asChild>
-                <Link href="/bookings">
-                  View All
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {upcomingBookings.map((booking) => {
-                const sortedSlots = [...(booking.booking_slots || [])].sort(
-                  (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-                );
-                const firstSlot = sortedSlots[0];
-                const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
-                const firstSlotStartSGT = firstSlot ? toZonedTime(firstSlot.start_time, TIMEZONE) : new Date();
-
-                return (
-                  <Card
-                    key={booking.id}
-                    className="group hover:shadow-lg transition-all hover:-translate-y-1 border-border/50"
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex flex-col gap-2">
-                          <CardTitle className="text-lg">{bookingTypeLabel}</CardTitle>
-                          <Badge variant="outline" className="w-fit text-xs">
-                            {bookingTypeLabel}
-                          </Badge>
-                        </div>
-                        <Badge
-                          variant={booking.status === "PENDING_PAYMENT" ? "secondary" : "default"}
-                        >
-                          {booking.status === "PENDING_PAYMENT" ? "Pending" : "Confirmed"}
-                        </Badge>
-                      </div>
-                      <CardDescription className="pt-2">
-                        {firstSlot
-                          ? format(firstSlotStartSGT, "EEEE, d MMMM yyyy")
-                          : "N/A"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {/* Display all slots */}
-                      <div className="space-y-2">
-                        {sortedSlots.map((slot) => {
-                          const slotStartSGT = toZonedTime(slot.start_time, TIMEZONE);
-                          const slotEndSGT = toZonedTime(slot.end_time, TIMEZONE);
-
-                          return (
-                            <div key={slot.id} className="flex items-center gap-2 text-sm">
-                              <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                              <span className="font-medium text-xs">{slot.courts?.name}</span>
-                              <span className="text-gray-400">•</span>
-                              <span className="text-muted-foreground text-xs">
-                                {format(slotStartSGT, "h:mm a")} - {format(slotEndSGT, "h:mm a")}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full rounded-full group-hover:bg-gray-900 group-hover:text-white transition-colors"
-                        asChild
-                      >
-                        <Link href={`/bookings/${booking.id}`}>
-                          View Details
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-
-        {/* Features */}
-        <section className="py-16 border-t border-border/50">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold mb-3">Why Thirdshot?</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto text-base">
-              We're building the best pickleball experience in Singapore
+      {/* Features Grid */}
+      <section className="py-20 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Everything your club needs
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              From court scheduling to member management, Thirdshot handles the
+              operations so you can focus on growing your community.
             </p>
           </div>
-          <div className="grid gap-8 md:grid-cols-3">
-            <div className="text-center group">
-              <div className="bg-primary/5 rounded-3xl w-20 h-20 flex items-center justify-center mx-auto mb-5 group-hover:scale-105 transition-transform">
-                <Zap className="h-10 w-10 text-primary" />
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => (
+              <div key={feature.title} className="p-6 rounded-xl border border-gray-100 hover:border-gray-200 hover:shadow-sm transition-all">
+                <feature.icon className="h-8 w-8 text-primary mb-4" />
+                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {feature.description}
+                </p>
               </div>
-              <h3 className="font-semibold text-lg mb-2.5">Instant Booking</h3>
-              <p className="text-muted-foreground text-sm leading-relaxed max-w-xs mx-auto">
-                Book your court in seconds. Real-time availability updates.
-              </p>
-            </div>
-            <div className="text-center group">
-              <div className="bg-primary/5 rounded-3xl w-20 h-20 flex items-center justify-center mx-auto mb-5 group-hover:scale-105 transition-transform">
-                <Shield className="h-10 w-10 text-primary" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2.5">Premium Courts</h3>
-              <p className="text-muted-foreground text-sm leading-relaxed max-w-xs mx-auto">
-                Professional-grade surfaces, indoor and outdoor options.
-              </p>
-            </div>
-            <div className="text-center group">
-              <div className="bg-primary/5 rounded-3xl w-20 h-20 flex items-center justify-center mx-auto mb-5 group-hover:scale-105 transition-transform">
-                <Users className="h-10 w-10 text-primary" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2.5">Growing Community</h3>
-              <p className="text-muted-foreground text-sm leading-relaxed max-w-xs mx-auto">
-                Join Singapore's fastest growing pickleball community.
-              </p>
-            </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* CTA Section */}
-        <section className="py-16 mb-8">
-          <div className="gradient-blue-bg rounded-3xl p-10 md:p-16 text-center text-white relative overflow-hidden card-elevated">
-            <div className="relative">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Ready to Play?
-              </h2>
-              <p className="text-white/90 mb-10 max-w-xl mx-auto text-lg leading-relaxed">
-                Book your first court today and experience the thirdshot
-                difference.
-              </p>
-              <Button
-                size="lg"
-                className="rounded-full bg-white text-primary hover:bg-white/95 text-lg px-10 h-14 font-semibold shadow-lg"
-                asChild
-              >
-                <Link href="/courts">
-                  Book a Court
-                </Link>
-              </Button>
+      {/* CTA Section */}
+      <section className="py-20 bg-gray-50">
+        <div className="max-w-3xl mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-4">
+            Ready to streamline your club?
+          </h2>
+          <p className="text-muted-foreground mb-8 text-lg">
+            Set up your club in minutes. No credit card required.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="rounded-full text-lg px-8 h-12" asChild>
+              <Link href="/signup">Get Started Free</Link>
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="rounded-full text-lg px-8 h-12"
+              asChild
+            >
+              <Link href="/dashboard">Go to Dashboard</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-200 bg-white py-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p className="font-bold text-lg">Thirdshot</p>
+            <div className="flex gap-6 text-sm text-muted-foreground">
+              <Link href="/terms" className="hover:underline">
+                Terms
+              </Link>
+              <Link href="/privacy" className="hover:underline">
+                Privacy
+              </Link>
+              <Link href="/login" className="hover:underline">
+                Sign in
+              </Link>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </footer>
     </div>
   );
 }

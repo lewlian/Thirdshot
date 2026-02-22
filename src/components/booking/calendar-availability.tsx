@@ -25,10 +25,14 @@ interface SelectedSlot {
 
 interface CalendarAvailabilityProps {
   availability: DayAvailability[];
+  orgId: string;
+  orgSlug: string;
 }
 
 export function CalendarAvailability({
   availability,
+  orgId,
+  orgSlug,
 }: CalendarAvailabilityProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -110,7 +114,7 @@ export function CalendarAvailability({
         priceInCents: slot.priceInCents,
       }));
 
-      const result = await createMultipleBookings(slotsInput);
+      const result = await createMultipleBookings(orgId, slotsInput);
 
       if (result.error) {
         toast.error(result.error);
@@ -120,7 +124,7 @@ export function CalendarAvailability({
       if (result.success && result.bookingId) {
         toast.success("Booking created successfully!");
         // Redirect directly to payment page
-        router.push(`/bookings/${result.bookingId}/pay`);
+        router.push(`/o/${orgSlug}/bookings/${result.bookingId}/pay`);
       }
     } catch (error) {
       console.error("Error creating booking:", error);

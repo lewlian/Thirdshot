@@ -57,7 +57,7 @@ export async function updateProfile(
   return { success: true };
 }
 
-export async function getProfileStats() {
+export async function getProfileStats(orgId: string) {
   const user = await getUser();
   if (!user) {
     return null;
@@ -78,6 +78,7 @@ export async function getProfileStats() {
   // Use RPC for complex count queries with relation filters
   const { data: stats } = await supabase.rpc('get_profile_stats', {
     p_user_id: dbUser.id,
+    p_organization_id: orgId,
   });
 
   if (!stats) {

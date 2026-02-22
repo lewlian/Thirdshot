@@ -13,9 +13,10 @@ import type { Court } from "@/types";
 
 interface CourtCardProps {
   court: Court;
+  linkPrefix?: string;
 }
 
-export function CourtCard({ court }: CourtCardProps) {
+export function CourtCard({ court, linkPrefix = "" }: CourtCardProps) {
   const pricePerHour = (court.price_per_hour_cents / 100).toFixed(0);
   const peakPrice = court.peak_price_per_hour_cents
     ? (court.peak_price_per_hour_cents / 100).toFixed(0)
@@ -81,7 +82,7 @@ export function CourtCard({ court }: CourtCardProps) {
             className="rounded-full bg-primary hover:bg-primary/90 px-6 py-2.5 h-auto font-medium shadow-sm"
             asChild
           >
-            <Link href={`/courts/${court.id}`}>
+            <Link href={`${linkPrefix}/courts/${court.id}`}>
               Book Now
             </Link>
           </Button>

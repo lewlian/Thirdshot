@@ -35,6 +35,7 @@ interface BookingCardProps {
     expires_at?: string | null;
     booking_slots: BookingSlot[];
   };
+  linkPrefix?: string;
 }
 
 const statusConfig: Record<BookingStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -52,7 +53,7 @@ const typeConfig: Record<BookingType, string> = {
   PRIVATE_COACHING: "Private Coaching",
 };
 
-export function BookingCard({ booking }: BookingCardProps) {
+export function BookingCard({ booking, linkPrefix = "" }: BookingCardProps) {
   const router = useRouter();
   const totalDollars = (booking.total_cents / 100).toFixed(2);
   const status = statusConfig[booking.status] || { label: booking.status, variant: "outline" as const };
@@ -161,11 +162,11 @@ export function BookingCard({ booking }: BookingCardProps) {
           <div className="flex gap-2">
             {isPending && !hasExpired && (
               <Button asChild size="sm">
-                <Link href={`/bookings/${booking.id}/pay`}>Pay Now</Link>
+                <Link href={`${linkPrefix}/bookings/${booking.id}/pay`}>Pay Now</Link>
               </Button>
             )}
             <Button asChild variant="ghost" size="sm">
-              <Link href={`/bookings/${booking.id}`}>
+              <Link href={`${linkPrefix}/bookings/${booking.id}`}>
                 View <ChevronRight className="h-4 w-4 ml-1" />
               </Link>
             </Button>

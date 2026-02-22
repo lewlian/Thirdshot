@@ -18,15 +18,16 @@ interface Block {
 
 interface BlockListProps {
   blocks: Block[];
+  orgId: string;
 }
 
-export function BlockList({ blocks }: BlockListProps) {
+export function BlockList({ blocks, orgId }: BlockListProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleDelete = (blockId: string) => {
     startTransition(async () => {
-      await deleteCourtBlock(blockId);
+      await deleteCourtBlock(blockId, orgId);
       router.refresh();
     });
   };

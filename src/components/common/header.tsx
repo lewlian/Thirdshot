@@ -11,17 +11,21 @@ import { useState } from "react";
 interface HeaderProps {
   user: User | null;
   isAdmin?: boolean;
+  orgSlug?: string;
 }
 
-export function Header({ user, isAdmin = false }: HeaderProps) {
+export function Header({ user, isAdmin = false, orgSlug }: HeaderProps) {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const prefix = orgSlug ? `/o/${orgSlug}` : "";
+  const homeHref = orgSlug ? `/o/${orgSlug}/courts` : "/";
+
   const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/courts", label: "Courts" },
-    ...(user ? [{ href: "/bookings", label: "My Bookings" }] : []),
-    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: Shield }] : []),
+    { href: homeHref, label: orgSlug ? "Courts" : "Home" },
+    ...(!orgSlug ? [{ href: "/courts", label: "Courts" }] : []),
+    ...(user ? [{ href: `${prefix}/bookings`, label: "My Bookings" }] : []),
+    ...(isAdmin ? [{ href: `${prefix}/admin`, label: "Admin", icon: Shield }] : []),
   ];
 
   const isActive = (href: string) => {
@@ -34,7 +38,7 @@ export function Header({ user, isAdmin = false }: HeaderProps) {
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-18">
           <div className="flex">
-            <Link href="/" className="flex-shrink-0 flex items-center gap-2.5">
+            <Link href={homeHref} className="flex-shrink-0 flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
                 <span className="text-white font-bold text-base">T</span>
               </div>
@@ -67,7 +71,7 @@ export function Header({ user, isAdmin = false }: HeaderProps) {
           <div className="hidden sm:ml-6 sm:flex sm:items-center gap-3">
             {user ? (
               <>
-                <Link href="/profile">
+                <Link href={`${prefix}/profile`}>
                   <Button variant="ghost" size="sm" className="rounded-full font-medium">
                     Profile
                   </Button>
@@ -146,7 +150,7 @@ export function Header({ user, isAdmin = false }: HeaderProps) {
               {user ? (
                 <>
                   <Link
-                    href="/profile"
+                    href={`${prefix}/profile`}
                     className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => setMobileMenuOpen(false)}
                   >

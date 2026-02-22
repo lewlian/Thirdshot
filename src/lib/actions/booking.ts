@@ -64,6 +64,12 @@ export async function createBooking(
     };
   }
 
+  // Extract org ID
+  const orgId = formData.get("orgId") as string;
+  if (!orgId) {
+    return { error: "Organization ID is required" };
+  }
+
   // Parse and validate input
   const rawData = {
     courtId: formData.get("courtId") as string,
@@ -84,6 +90,7 @@ export async function createBooking(
     .from('courts')
     .select('*')
     .eq('id', courtId)
+    .eq('organization_id', orgId)
     .single();
 
   if (!court || !court.is_active) {
@@ -126,6 +133,7 @@ export async function createBooking(
     // Use RPC for atomic booking creation with availability check
     const { data: bookingId, error } = await supabase.rpc('create_booking_with_slots', {
       p_user_id: dbUser.id,
+      p_organization_id: orgId,
       p_type: 'COURT_BOOKING',
       p_total_cents: priceBreakdown.totalCents,
       p_currency: priceBreakdown.currency,
@@ -160,6 +168,7 @@ interface SlotInput {
  * Create a new booking with multiple non-consecutive time slots
  */
 export async function createMultipleBookings(
+  orgId: string,
   slots: SlotInput[]
 ): Promise<BookingActionResult> {
   const supabase = await createServerSupabaseClient();
@@ -213,6 +222,7 @@ export async function createMultipleBookings(
 
     const { data: bookingId, error } = await supabase.rpc('create_booking_with_slots', {
       p_user_id: dbUser.id,
+      p_organization_id: orgId,
       p_type: 'COURT_BOOKING',
       p_total_cents: totalCents,
       p_currency: 'SGD',
@@ -262,7 +272,7 @@ export async function cancelBooking(
 
   const { data: booking } = await supabase
     .from('bookings')
-    .select('*, payments(*), users(*), booking_slots(*, courts(*))')
+    .select('*, payments(*), users(*), booking_slots(*, courts(*)), organizations(slug)')
     .eq('id', bookingId)
     .single();
 
@@ -316,6 +326,11 @@ export async function cancelBooking(
     });
   }
 
+  const orgSlug = booking.organizations?.slug;
+  if (orgSlug) {
+    revalidatePath(`/o/${orgSlug}/bookings`);
+    revalidatePath(`/o/${orgSlug}/bookings/${bookingId}`);
+  }
   revalidatePath("/bookings");
   revalidatePath(`/bookings/${bookingId}`);
 

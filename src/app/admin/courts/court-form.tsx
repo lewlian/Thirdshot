@@ -30,9 +30,10 @@ interface Court {
 
 interface CourtFormProps {
   court?: Court;
+  orgId?: string;
 }
 
-export function CourtForm({ court }: CourtFormProps) {
+export function CourtForm({ court, orgId }: CourtFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +43,9 @@ export function CourtForm({ court }: CourtFormProps) {
 
   const handleSubmit = (formData: FormData) => {
     formData.set("isActive", isActive.toString());
+    if (orgId) {
+      formData.set("orgId", orgId);
+    }
 
     startTransition(async () => {
       const result = isEditing
@@ -58,7 +62,7 @@ export function CourtForm({ court }: CourtFormProps) {
 
   const handleDelete = () => {
     startTransition(async () => {
-      const result = await deleteCourt(court!.id);
+      const result = await deleteCourt(court!.id, orgId || "");
 
       if (result.success) {
         router.push("/admin/courts");

@@ -8,6 +8,7 @@ import type { Court } from "@/types";
 // Mock court data
 const createMockCourt = (overrides: Partial<Court> = {}): Court => ({
   id: "court-1",
+  organization_id: "test-org",
   name: "Test Court",
   description: "Test Description",
   is_active: true,

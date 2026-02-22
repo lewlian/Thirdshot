@@ -10,15 +10,17 @@ import { createCourtBlock } from "@/lib/actions/admin";
 
 interface BlockFormProps {
   courtId: string;
+  orgId: string;
 }
 
-export function BlockForm({ courtId }: BlockFormProps) {
+export function BlockForm({ courtId, orgId }: BlockFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (formData: FormData) => {
     formData.set("courtId", courtId);
+    formData.set("orgId", orgId);
 
     startTransition(async () => {
       const result = await createCourtBlock(formData);

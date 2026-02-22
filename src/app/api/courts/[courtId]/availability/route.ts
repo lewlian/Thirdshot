@@ -16,19 +16,7 @@ import {
  *
  * Query parameters:
  * - date: ISO date string (YYYY-MM-DD) - Required
- *
- * Response body:
- * - slots: Array of TimeSlot objects with:
- *   - startTime: Date
- *   - endTime: Date
- *   - isAvailable: boolean
- *   - isPeak: boolean
- *   - priceInCents: number
- *
- * Response codes:
- * - 200: Success with slots array
- * - 400: Missing or invalid date parameter
- * - 500: Server error
+ * - orgId: Organization ID - Required
  */
 export async function GET(
   request: NextRequest,
@@ -54,10 +42,18 @@ export async function GET(
 
   const searchParams = request.nextUrl.searchParams;
   const dateStr = searchParams.get("date");
+  const orgId = searchParams.get("orgId");
 
   if (!dateStr) {
     return NextResponse.json(
       { error: "Date parameter is required" },
+      { status: 400 }
+    );
+  }
+
+  if (!orgId) {
+    return NextResponse.json(
+      { error: "orgId parameter is required" },
       { status: 400 }
     );
   }
@@ -71,7 +67,7 @@ export async function GET(
   }
 
   try {
-    const slots = await getCourtAvailability(courtId, date);
+    const slots = await getCourtAvailability(courtId, date, orgId);
     return NextResponse.json({ slots });
   } catch {
     return NextResponse.json(

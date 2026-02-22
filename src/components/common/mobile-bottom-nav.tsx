@@ -5,27 +5,24 @@ import { usePathname } from "next/navigation";
 import { Home, Calendar, FileText, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function MobileBottomNav() {
+export function MobileBottomNav({ orgSlug }: { orgSlug?: string }) {
   const pathname = usePathname();
+
+  const prefix = orgSlug ? `/o/${orgSlug}` : "";
 
   const navItems = [
     {
-      href: "/",
-      label: "Home",
-      icon: Home,
-    },
-    {
-      href: "/courts",
-      label: "Book",
+      href: `${prefix}/courts`,
+      label: "Courts",
       icon: Calendar,
     },
     {
-      href: "/bookings",
+      href: `${prefix}/bookings`,
       label: "Bookings",
       icon: FileText,
     },
     {
-      href: "/profile",
+      href: `${prefix}/profile`,
       label: "Profile",
       icon: User,
     },

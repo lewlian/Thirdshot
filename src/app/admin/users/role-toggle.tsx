@@ -14,9 +14,10 @@ import { updateUserRole } from "@/lib/actions/admin";
 interface UserRoleToggleProps {
   userId: string;
   role: "USER" | "ADMIN";
+  orgId: string;
 }
 
-export function UserRoleToggle({ userId, role }: UserRoleToggleProps) {
+export function UserRoleToggle({ userId, role, orgId }: UserRoleToggleProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -24,7 +25,7 @@ export function UserRoleToggle({ userId, role }: UserRoleToggleProps) {
     if (newRole === role) return;
 
     startTransition(async () => {
-      const result = await updateUserRole(userId, newRole);
+      const result = await updateUserRole(userId, newRole, orgId);
       if (!result.success) {
         alert(result.error);
       }

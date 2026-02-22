@@ -32,9 +32,10 @@ interface Booking {
 interface BookingListProps {
   bookings: Booking[];
   emptyMessage?: string;
+  linkPrefix?: string;
 }
 
-export function BookingList({ bookings, emptyMessage = "No bookings found" }: BookingListProps) {
+export function BookingList({ bookings, emptyMessage = "No bookings found", linkPrefix = "" }: BookingListProps) {
   if (bookings.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -82,7 +83,7 @@ export function BookingList({ bookings, emptyMessage = "No bookings found" }: Bo
           {/* Bookings for this date */}
           <div className="space-y-3">
             {group.bookings.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} />
+              <BookingCard key={booking.id} booking={booking} linkPrefix={linkPrefix} />
             ))}
           </div>
         </div>
@@ -96,7 +97,7 @@ export function BookingList({ bookings, emptyMessage = "No bookings found" }: Bo
           </h3>
           <div className="space-y-3">
             {bookingsWithoutSlots.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} />
+              <BookingCard key={booking.id} booking={booking} linkPrefix={linkPrefix} />
             ))}
           </div>
         </div>

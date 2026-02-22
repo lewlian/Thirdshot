@@ -26,12 +26,16 @@ interface CourtBookingFormProps {
   court: Court;
   bookableDates: Date[];
   maxSlots: number;
+  orgId?: string;
+  orgSlug?: string;
 }
 
 export function CourtBookingForm({
   court,
   bookableDates,
   maxSlots,
+  orgId,
+  orgSlug,
 }: CourtBookingFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -48,8 +52,9 @@ export function CourtBookingForm({
 
       try {
         const dateStr = format(selectedDate, "yyyy-MM-dd");
+        const orgParam = orgId ? `&orgId=${orgId}` : "";
         const response = await fetch(
-          `/api/courts/${court.id}/availability?date=${dateStr}`
+          `/api/courts/${court.id}/availability?date=${dateStr}${orgParam}`
         );
         const data = await response.json();
 
@@ -119,6 +124,7 @@ export function CourtBookingForm({
     formData.append("date", format(selectedDate, "yyyy-MM-dd"));
     formData.append("startTime", format(selectedSlots[0].startTime, "HH:mm"));
     formData.append("slots", selectedSlots.length.toString());
+    if (orgId) formData.append("orgId", orgId);
 
     startTransition(async () => {
       const result = await createBooking(formData);
@@ -130,7 +136,8 @@ export function CourtBookingForm({
 
       if (result.success && result.bookingId) {
         toast.success("Booking created! Redirecting to payment...");
-        router.push(`/bookings/${result.bookingId}/pay`);
+        const prefix = orgSlug ? `/o/${orgSlug}` : "";
+        router.push(`${prefix}/bookings/${result.bookingId}/pay`);
       }
     });
   };

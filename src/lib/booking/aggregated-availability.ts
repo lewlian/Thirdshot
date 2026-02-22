@@ -33,14 +33,16 @@ export interface DayAvailability {
  * Get aggregated availability for all active courts for a specific date
  */
 export async function getAggregatedAvailability(
-  date: Date
+  date: Date,
+  orgId: string
 ): Promise<AggregatedTimeSlot[]> {
   const supabase = await createServerSupabaseClient();
 
-  // Get all active courts
+  // Get all active courts for this org
   const { data: courts } = await supabase
     .from('courts')
     .select('*')
+    .eq('organization_id', orgId)
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
@@ -50,7 +52,7 @@ export async function getAggregatedAvailability(
 
   // Get availability for each court
   const courtAvailabilities = await Promise.all(
-    courts.map((court) => getCourtAvailability(court.id, date))
+    courts.map((court) => getCourtAvailability(court.id, date, orgId))
   );
 
   // Aggregate by time slot
@@ -99,10 +101,11 @@ export async function getAggregatedAvailability(
  * Get availability for the next N days including 1 extra day that's not bookable yet
  */
 export async function getCalendarAvailability(
+  orgId: string,
   includeExtraDay: boolean = true
 ): Promise<DayAvailability[]> {
   const supabase = await createServerSupabaseClient();
-  const bookableDates = await getBookableDates();
+  const bookableDates = await getBookableDates(orgId);
   const dates = [...bookableDates];
 
   // Add one extra day that's not bookable yet
@@ -116,6 +119,7 @@ export async function getCalendarAvailability(
   const { data: bookingWindowSetting } = await supabase
     .from('app_settings')
     .select('*')
+    .eq('organization_id', orgId)
     .eq('key', 'booking_window_days')
     .single();
 
@@ -125,7 +129,7 @@ export async function getCalendarAvailability(
   const availabilities = await Promise.all(
     dates.map(async (date, index) => {
       const isBookable = index < bookableDates.length;
-      const slots = isBookable ? await getAggregatedAvailability(date) : [];
+      const slots = isBookable ? await getAggregatedAvailability(date, orgId) : [];
 
       let bookingOpensAt: Date | undefined;
       if (!isBookable) {

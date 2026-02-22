@@ -12,7 +12,8 @@ const TIMEZONE = "Asia/Singapore";
  */
 export async function getCourtAvailability(
   courtId: string,
-  date: Date
+  date: Date,
+  orgId: string
 ): Promise<TimeSlot[]> {
   // Expire any stale pending bookings before checking availability
   await expireStaleBookings();
@@ -35,8 +36,9 @@ export async function getCourtAvailability(
 
   const { data: bookingSlots } = await supabase
     .from('booking_slots')
-    .select('*, bookings!inner(status)')
+    .select('*, bookings!inner(status, organization_id)')
     .eq('court_id', courtId)
+    .eq('bookings.organization_id', orgId)
     .gte('start_time', dayStart.toISOString())
     .lt('start_time', dayEnd.toISOString())
     .not('bookings.status', 'in', '("CANCELLED","EXPIRED")');
@@ -46,6 +48,7 @@ export async function getCourtAvailability(
     .from('court_blocks')
     .select('*')
     .eq('court_id', courtId)
+    .eq('organization_id', orgId)
     .or(`and(start_time.gte.${dayStart.toISOString()},start_time.lt.${dayEnd.toISOString()}),and(end_time.gt.${dayStart.toISOString()},end_time.lte.${dayEnd.toISOString()}),and(start_time.lte.${dayStart.toISOString()},end_time.gte.${dayEnd.toISOString()})`);
 
   // Generate time slots
@@ -149,13 +152,14 @@ function isPeakTime(hour: number, date: Date): boolean {
 /**
  * Get all dates within the booking window
  */
-export async function getBookableDates(): Promise<Date[]> {
+export async function getBookableDates(orgId: string): Promise<Date[]> {
   const supabase = await createServerSupabaseClient();
 
   // Get booking window from settings (default 7 days)
   const { data: setting } = await supabase
     .from('app_settings')
     .select('*')
+    .eq('organization_id', orgId)
     .eq('key', 'booking_window_days')
     .single();
 
@@ -176,7 +180,8 @@ export async function getBookableDates(): Promise<Date[]> {
 export async function checkSlotAvailability(
   courtId: string,
   startTime: Date,
-  endTime: Date
+  endTime: Date,
+  orgId: string
 ): Promise<{ available: boolean; reason?: string }> {
   // Expire any stale pending bookings before checking
   await expireStaleBookings();
@@ -200,7 +205,7 @@ export async function checkSlotAvailability(
   }
 
   // Check if within booking window
-  const bookableDates = await getBookableDates();
+  const bookableDates = await getBookableDates(orgId);
   const slotDate = startOfDay(startTime);
   const isWithinWindow = bookableDates.some(
     (d) => d.getTime() === slotDate.getTime()
@@ -213,8 +218,9 @@ export async function checkSlotAvailability(
   // Check for existing booking slots
   const { data: existingSlots } = await supabase
     .from('booking_slots')
-    .select('*, bookings!inner(status)')
+    .select('*, bookings!inner(status, organization_id)')
     .eq('court_id', courtId)
+    .eq('bookings.organization_id', orgId)
     .lt('start_time', endTime.toISOString())
     .gt('end_time', startTime.toISOString())
     .not('bookings.status', 'in', '("CANCELLED","EXPIRED")')
@@ -229,6 +235,7 @@ export async function checkSlotAvailability(
     .from('court_blocks')
     .select('*')
     .eq('court_id', courtId)
+    .eq('organization_id', orgId)
     .lt('start_time', endTime.toISOString())
     .gt('end_time', startTime.toISOString())
     .limit(1);
