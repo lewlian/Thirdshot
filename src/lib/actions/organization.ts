@@ -165,6 +165,48 @@ export async function updateBookingSettings(orgId: string, formData: FormData) {
 }
 
 /**
+ * Update club page settings (hero image, tagline, operating hours). Admin or owner.
+ */
+export async function updateClubPage(orgId: string, formData: FormData) {
+  const { userId } = await requireOrgRole(orgId, "admin");
+
+  const heroImageUrl = (formData.get("hero_image_url") as string) || "";
+  const tagline = (formData.get("tagline") as string) || "";
+
+  // Parse operating hours from form
+  const days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const operatingHours: Record<string, string> = {};
+  for (const day of days) {
+    operatingHours[day] = (formData.get(`hours_${day}`) as string) || "07:00-22:00";
+  }
+
+  try {
+    const supabase = await createServerSupabaseClient();
+
+    const { error } = await supabase
+      .from("organizations")
+      .update({
+        hero_image_url: heroImageUrl || null,
+        tagline: tagline || null,
+        operating_hours: operatingHours,
+      })
+      .eq("id", orgId);
+
+    if (error) throw error;
+
+    await createAuditLog(userId, orgId, "UPDATE_CLUB_PAGE", "Organization", orgId, {
+      newData: { hero_image_url: heroImageUrl, tagline, operating_hours: operatingHours },
+    });
+
+    revalidatePath(`/admin/settings`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update club page:", error);
+    return { error: "Failed to update club page settings" };
+  }
+}
+
+/**
  * Update organization branding (primary color). Admin or owner.
  */
 export async function updateBranding(orgId: string, formData: FormData) {

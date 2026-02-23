@@ -35,6 +35,9 @@ export type Database = {
           payment_api_key_encrypted: string | null
           payment_salt_encrypted: string | null
           plan: string
+          hero_image_url: string | null
+          tagline: string | null
+          operating_hours: Json | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -64,6 +67,9 @@ export type Database = {
           payment_api_key_encrypted?: string | null
           payment_salt_encrypted?: string | null
           plan?: string
+          hero_image_url?: string | null
+          tagline?: string | null
+          operating_hours?: Json | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -93,6 +99,9 @@ export type Database = {
           payment_api_key_encrypted?: string | null
           payment_salt_encrypted?: string | null
           plan?: string
+          hero_image_url?: string | null
+          tagline?: string | null
+          operating_hours?: Json | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -348,6 +357,7 @@ export type Database = {
           cancelled_at: string | null
           cancel_reason: string | null
           reminder_sent_at: string | null
+          recurring_booking_id: string | null
           created_at: string
           updated_at: string
         }
@@ -366,6 +376,7 @@ export type Database = {
           cancelled_at?: string | null
           cancel_reason?: string | null
           reminder_sent_at?: string | null
+          recurring_booking_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -384,6 +395,7 @@ export type Database = {
           cancelled_at?: string | null
           cancel_reason?: string | null
           reminder_sent_at?: string | null
+          recurring_booking_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1105,6 +1117,178 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      waivers: {
+        Row: {
+          id: string
+          organization_id: string
+          title: string
+          content: string
+          version: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          title: string
+          content: string
+          version?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          title?: string
+          content?: string
+          version?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waivers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      waiver_signatures: {
+        Row: {
+          id: string
+          organization_id: string
+          waiver_id: string
+          user_id: string
+          signed_at: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          waiver_id: string
+          user_id: string
+          signed_at?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          waiver_id?: string
+          user_id?: string
+          signed_at?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "waiver_signatures_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waiver_signatures_waiver_id_fkey"
+            columns: ["waiver_id"]
+            isOneToOne: false
+            referencedRelation: "waivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waiver_signatures_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      recurring_bookings: {
+        Row: {
+          id: string
+          organization_id: string
+          created_by_id: string
+          court_id: string
+          title: string
+          day_of_week: number
+          start_time: string
+          end_time: string
+          starts_on: string
+          ends_on: string
+          frequency: string
+          skip_dates: string[]
+          is_active: boolean
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          created_by_id: string
+          court_id: string
+          title: string
+          day_of_week: number
+          start_time: string
+          end_time: string
+          starts_on: string
+          ends_on: string
+          frequency?: string
+          skip_dates?: string[]
+          is_active?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          created_by_id?: string
+          court_id?: string
+          title?: string
+          day_of_week?: number
+          start_time?: string
+          end_time?: string
+          starts_on?: string
+          ends_on?: string
+          frequency?: string
+          skip_dates?: string[]
+          is_active?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_bookings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_bookings_created_by_id_fkey"
+            columns: ["created_by_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_bookings_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
             referencedColumns: ["id"]
           }
         ]

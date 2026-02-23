@@ -17,7 +17,7 @@ export default async function PublicLayout({
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link href={`/o/${slug}/book`} className="flex items-center gap-2">
+            <Link href={`/o/${slug}`} className="flex items-center gap-2">
               {org.logo_url ? (
                 <img
                   src={org.logo_url}

@@ -16,6 +16,8 @@ import {
   Receipt
 } from "lucide-react";
 import { CancelBookingButton } from "@/app/(main)/bookings/[bookingId]/cancel-button";
+import { AddToCalendar } from "@/components/booking/add-to-calendar";
+import { generateGoogleCalendarUrl } from "@/lib/calendar/ical";
 
 const TIMEZONE = "Asia/Singapore";
 
@@ -79,6 +81,22 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
   const isUpcoming = firstSlot && new Date(firstSlot.start_time) > new Date();
   const canCancel = booking.status === "CONFIRMED" && isUpcoming;
   const isPending = booking.status === "PENDING_PAYMENT";
+  const isConfirmed = booking.status === "CONFIRMED";
+
+  const lastSlot = sortedSlots[sortedSlots.length - 1];
+  const calendarCourtName = sortedSlots.length > 1
+    ? `${sortedSlots.length} courts`
+    : firstSlot?.courts?.name || "Court";
+  const calendarUrl = firstSlot && lastSlot
+    ? generateGoogleCalendarUrl({
+        title: `Pickleball - ${calendarCourtName}`,
+        description: `Booking ID: ${booking.id}\nCourt: ${calendarCourtName}`,
+        location: org.address || org.name,
+        startTime: new Date(firstSlot.start_time),
+        endTime: new Date(lastSlot.end_time),
+        bookingId: booking.id,
+      })
+    : "";
 
   const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
     PENDING_PAYMENT: { label: "Pending Payment", variant: "secondary" },
@@ -218,6 +236,10 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
 
             {canCancel && (
               <CancelBookingButton bookingId={bookingId} />
+            )}
+
+            {isConfirmed && (
+              <AddToCalendar bookingId={booking.id} googleCalendarUrl={calendarUrl} />
             )}
 
             <Button asChild variant="outline" className="flex-1">

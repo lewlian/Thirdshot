@@ -85,7 +85,30 @@ export async function inviteMember(orgId: string, formData: FormData) {
         return { error: "This user is already a member of this organization" };
       }
 
-      // Add as member directly
+      // Check if org has an active waiver
+      const { data: activeWaiver } = await supabase
+        .from("waivers")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("is_active", true)
+        .limit(1)
+        .single();
+
+      // Check if user already signed the waiver
+      let needsWaiver = false;
+      if (activeWaiver) {
+        const { data: signature } = await supabase
+          .from("waiver_signatures")
+          .select("id")
+          .eq("waiver_id", activeWaiver.id)
+          .eq("user_id", existingUser.id)
+          .single();
+        needsWaiver = !signature;
+      }
+
+      const memberStatus = needsWaiver ? "pending_waiver" : "active";
+
+      // Add as member
       const { error: insertError } = await supabase
         .from("organization_members")
         .insert({
@@ -93,7 +116,7 @@ export async function inviteMember(orgId: string, formData: FormData) {
           user_id: existingUser.id,
           role,
           membership_tier_id: tierId || null,
-          membership_status: "active",
+          membership_status: memberStatus,
         });
 
       if (insertError) throw insertError;

@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Calendar, Clock, MapPin, XCircle, AlertCircle } from "lucide-react";
 import { ConfirmationClient } from "@/app/(main)/bookings/[bookingId]/confirmation/confirmation-client";
+import { AddToCalendar } from "@/components/booking/add-to-calendar";
+import { generateGoogleCalendarUrl } from "@/lib/calendar/ical";
 
 const TIMEZONE = "Asia/Singapore";
 
@@ -173,6 +175,22 @@ export default async function ConfirmationPage({
   const totalDollars = (booking.total_cents / 100).toFixed(2);
   const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
 
+  // Build calendar data for confirmed bookings
+  const lastSlot = sortedSlots[sortedSlots.length - 1];
+  const courtName = sortedSlots.length > 1
+    ? `${sortedSlots.length} courts`
+    : firstSlot?.courts?.name || "Court";
+  const calendarUrl = firstSlot && lastSlot
+    ? generateGoogleCalendarUrl({
+        title: `Pickleball - ${courtName}`,
+        description: `Booking ID: ${booking.id}\nCourt: ${courtName}`,
+        location: org.address || org.name,
+        startTime: new Date(firstSlot.start_time),
+        endTime: new Date(lastSlot.end_time),
+        bookingId: booking.id,
+      })
+    : "";
+
   // Determine status display
   const isConfirmed = booking.status === "CONFIRMED";
   const isPending = booking.status === "PENDING_PAYMENT";
@@ -334,6 +352,7 @@ export default async function ConfirmationPage({
                 <Button asChild variant="outline" className="flex-1 rounded-full h-12 font-medium border-border/60">
                   <Link href={`/o/${slug}/courts`}>Book Another Court</Link>
                 </Button>
+                <AddToCalendar bookingId={booking.id} googleCalendarUrl={calendarUrl} />
               </>
             )}
 

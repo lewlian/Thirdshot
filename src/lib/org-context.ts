@@ -6,6 +6,7 @@ export interface OrgContext {
   id: string;
   name: string;
   slug: string;
+  description: string | null;
   timezone: string;
   currency: string;
   booking_window_days: number;
@@ -16,6 +17,10 @@ export interface OrgContext {
   primary_color: string;
   logo_url: string | null;
   email: string | null;
+  phone: string | null;
+  website: string | null;
+  address: string | null;
+  city: string | null;
   payment_provider: string;
   plan: string;
 }

@@ -181,6 +181,31 @@ export async function POST(request: NextRequest) {
       sort_order: 0,
     });
 
+    // Create default waiver
+    await supabase.from("waivers").insert({
+      id: crypto.randomUUID(),
+      organization_id: orgId,
+      title: "Liability Waiver",
+      content: `ASSUMPTION OF RISK AND WAIVER OF LIABILITY
+
+I acknowledge that participation in pickleball and related activities involves inherent risks, including but not limited to:
+
+- Physical injuries including sprains, strains, fractures, and other bodily harm
+- Contact with other participants, equipment, or court surfaces
+- Exposure to weather conditions
+- Cardiovascular incidents
+
+I voluntarily assume all risks associated with my participation in pickleball activities at this facility.
+
+I hereby release, waive, and discharge the facility, its owners, operators, employees, and agents from any and all liability, claims, demands, and causes of action arising from my participation in pickleball activities.
+
+I confirm that I am physically fit and have no medical conditions that would prevent my safe participation.
+
+I have read this waiver, understand its terms, and sign it voluntarily.`,
+      version: 1,
+      is_active: false, // Disabled by default, admin enables when ready
+    });
+
     // Create audit log
     await supabase.from("admin_audit_logs").insert({
       id: crypto.randomUUID(),

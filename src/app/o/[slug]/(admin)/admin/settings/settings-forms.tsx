@@ -19,7 +19,10 @@ import {
   updateOrgSettings,
   updateBookingSettings,
   updateBranding,
+  updateClubPage,
 } from "@/lib/actions/organization";
+import { updateWaiver } from "@/lib/actions/waivers";
+import type { Json } from "@/types/database";
 
 interface OrgData {
   id: string;
@@ -39,6 +42,9 @@ interface OrgData {
   max_consecutive_slots: number;
   payment_timeout_minutes: number;
   allow_guest_bookings: boolean;
+  hero_image_url?: string | null;
+  tagline?: string | null;
+  operating_hours?: Record<string, string> | Json | null;
 }
 
 export function GeneralSettingsForm({
@@ -431,3 +437,236 @@ export function BrandingForm({ org }: { org: OrgData }) {
     </Card>
   );
 }
+
+const DAY_LABELS: Record<string, string> = {
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+  sun: "Sunday",
+};
+
+const DAY_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+const DEFAULT_HOURS: Record<string, string> = {
+  mon: "07:00-22:00",
+  tue: "07:00-22:00",
+  wed: "07:00-22:00",
+  thu: "07:00-22:00",
+  fri: "07:00-22:00",
+  sat: "08:00-22:00",
+  sun: "08:00-22:00",
+};
+
+export function ClubPageForm({ org }: { org: OrgData }) {
+  const [isPending, startTransition] = useTransition();
+  const hours = (org.operating_hours as Record<string, string> | null) || DEFAULT_HOURS;
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    startTransition(async () => {
+      const result = await updateClubPage(org.id, formData);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Club page updated");
+      }
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Club Page</CardTitle>
+        <CardDescription>
+          Customize your public club page at{" "}
+          <a
+            href={`/o/${org.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline"
+          >
+            /o/{org.slug}
+          </a>
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="hero_image_url">Hero Image URL</Label>
+            <Input
+              id="hero_image_url"
+              name="hero_image_url"
+              type="url"
+              placeholder="https://example.com/hero.jpg"
+              defaultValue={org.hero_image_url || ""}
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty for a gradient background using your primary color
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tagline">Tagline</Label>
+            <Input
+              id="tagline"
+              name="tagline"
+              placeholder="Your club's tagline..."
+              defaultValue={org.tagline || ""}
+              maxLength={120}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label>Operating Hours</Label>
+            {DAY_ORDER.map((day) => (
+              <div key={day} className="flex items-center gap-3">
+                <span className="w-24 text-sm font-medium">{DAY_LABELS[day]}</span>
+                <Input
+                  name={`hours_${day}`}
+                  defaultValue={hours[day] || "07:00-22:00"}
+                  placeholder="07:00-22:00"
+                  className="w-40"
+                />
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Format: HH:MM-HH:MM or &quot;closed&quot;
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : "Save Club Page"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface WaiverData {
+  id: string;
+  title: string;
+  content: string;
+  version: number;
+  is_active: boolean;
+}
+
+export function WaiverSettingsForm({
+  org,
+  waiver,
+  signatureCount,
+}: {
+  org: OrgData;
+  waiver: WaiverData | null;
+  signatureCount: number;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    startTransition(async () => {
+      const result = await updateWaiver(org.id, formData);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Waiver updated");
+      }
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Digital Waiver</CardTitle>
+        <CardDescription>
+          Require members to sign a liability waiver when joining.
+          {waiver && ` Version ${waiver.version} - ${signatureCount} signature${signatureCount !== 1 ? "s" : ""}.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="waiver_title">Waiver Title</Label>
+            <Input
+              id="waiver_title"
+              name="title"
+              defaultValue={waiver?.title || "Liability Waiver"}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="waiver_content">Waiver Content</Label>
+            <Textarea
+              id="waiver_content"
+              name="content"
+              rows={10}
+              defaultValue={waiver?.content || DEFAULT_WAIVER_CONTENT}
+              placeholder="Enter your waiver text..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Editing the waiver creates a new version. Existing signatures remain valid.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between border rounded-lg p-4">
+            <div>
+              <Label htmlFor="waiver_active" className="font-medium">
+                Require Waiver
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                New members must sign the waiver before accessing courts
+              </p>
+            </div>
+            <input
+              type="hidden"
+              name="is_active"
+              value={waiver?.is_active !== false ? "true" : "false"}
+              id="waiver_active_hidden"
+            />
+            <Switch
+              defaultChecked={waiver?.is_active !== false}
+              onCheckedChange={(checked) => {
+                const hidden = document.getElementById(
+                  "waiver_active_hidden"
+                ) as HTMLInputElement;
+                if (hidden) hidden.value = checked ? "true" : "false";
+              }}
+            />
+          </div>
+
+          <div className="pt-2">
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving..." : "Save Waiver"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+const DEFAULT_WAIVER_CONTENT = `ASSUMPTION OF RISK AND WAIVER OF LIABILITY
+
+I acknowledge that participation in pickleball and related activities involves inherent risks, including but not limited to:
+
+- Physical injuries including sprains, strains, fractures, and other bodily harm
+- Contact with other participants, equipment, or court surfaces
+- Exposure to weather conditions
+- Cardiovascular incidents
+
+I voluntarily assume all risks associated with my participation in pickleball activities at this facility.
+
+I hereby release, waive, and discharge the facility, its owners, operators, employees, and agents from any and all liability, claims, demands, and causes of action arising from my participation in pickleball activities.
+
+I confirm that I am physically fit and have no medical conditions that would prevent my safe participation.
+
+I have read this waiver, understand its terms, and sign it voluntarily.`;

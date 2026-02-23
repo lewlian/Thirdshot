@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrgBySlug } from "@/lib/org-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Repeat } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import Link from "next/link";
 import { BookingStatusFilter } from "@/app/admin/bookings/status-filter";
@@ -88,7 +90,15 @@ async function BookingsContent({
             {total} total booking{total !== 1 ? "s" : ""}
           </p>
         </div>
-        <BookingStatusFilter currentStatus={status} />
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/o/${slug}/admin/bookings/recurring`}>
+              <Repeat className="h-4 w-4 mr-2" />
+              Recurring
+            </Link>
+          </Button>
+          <BookingStatusFilter currentStatus={status} />
+        </div>
       </div>
 
       <Card>

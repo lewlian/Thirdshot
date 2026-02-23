@@ -2,6 +2,7 @@ import { getResendClient, getFromEmail } from "./client";
 import { BookingConfirmationEmail } from "./templates/booking-confirmation";
 import { BookingCancelledEmail } from "./templates/booking-cancelled";
 import { BookingReminderEmail } from "./templates/booking-reminder";
+import { generateGoogleCalendarUrl } from "@/lib/calendar/ical";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
@@ -41,6 +42,15 @@ export async function sendBookingConfirmationEmail(
 
   const totalDollars = (data.totalCents / 100).toFixed(2);
 
+  const googleCalUrl = generateGoogleCalendarUrl({
+    title: `Pickleball - ${data.courtName}`,
+    description: `Booking ID: ${data.bookingId}`,
+    location: "",
+    startTime: data.startTime,
+    endTime: data.endTime,
+    bookingId: data.bookingId,
+  });
+
   try {
     const result = await resend.emails.send({
       from: getFromEmail(),
@@ -55,6 +65,7 @@ export async function sendBookingConfirmationEmail(
         totalAmount: `$${totalDollars} ${data.currency}`,
         bookingId: data.bookingId,
         paymentReference: data.paymentReference,
+        googleCalendarUrl: googleCalUrl,
       }),
     });
 

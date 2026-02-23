@@ -1,4 +1,15 @@
 import "@testing-library/jest-dom";
+import { randomUUID } from "crypto";
+
+// Polyfill crypto.randomUUID for jsdom test environment
+if (!globalThis.crypto?.randomUUID) {
+  Object.defineProperty(globalThis, "crypto", {
+    value: {
+      ...globalThis.crypto,
+      randomUUID,
+    },
+  });
+}
 
 // Mock Next.js router
 jest.mock("next/navigation", () => ({

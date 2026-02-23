@@ -4,6 +4,7 @@ import { Footer } from "@/components/common/footer";
 import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrgBySlug } from "@/lib/org-context";
 import { getUserOrgRole } from "@/lib/permissions";
+import { WaiverGate } from "@/components/waiver/waiver-gate";
 
 export default async function MemberLayout({
   children,
@@ -36,7 +37,11 @@ export default async function MemberLayout({
   return (
     <div className="flex flex-col min-h-screen">
       <Header user={supabaseUser} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} orgSlug={slug} />
-      <main className="flex-1 pb-16 md:pb-0">{children}</main>
+      <main className="flex-1 pb-16 md:pb-0">
+        <WaiverGate orgId={org.id} orgName={org.name} slug={slug}>
+          {children}
+        </WaiverGate>
+      </main>
       <Footer />
       <MobileBottomNav orgSlug={slug} />
     </div>

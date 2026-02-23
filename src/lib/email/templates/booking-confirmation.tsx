@@ -7,6 +7,7 @@ interface BookingConfirmationEmailProps {
   totalAmount: string;
   bookingId: string;
   paymentReference?: string;
+  googleCalendarUrl?: string;
 }
 
 export function BookingConfirmationEmail({
@@ -18,6 +19,7 @@ export function BookingConfirmationEmail({
   totalAmount,
   bookingId,
   paymentReference,
+  googleCalendarUrl,
 }: BookingConfirmationEmailProps): string {
   return `
 <!DOCTYPE html>
@@ -68,6 +70,15 @@ export function BookingConfirmationEmail({
           <tr>
             <td style="color: #6b7280; font-size: 14px; line-height: 20px; padding-bottom: 16px;">
               Payment Reference: ${paymentReference}
+            </td>
+          </tr>
+          ` : ''}
+          ${googleCalendarUrl ? `
+          <tr>
+            <td align="center" style="padding: 8px 0 16px 0;">
+              <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 10px 24px; border-radius: 6px;">
+                Add to Google Calendar
+              </a>
             </td>
           </tr>
           ` : ''}
