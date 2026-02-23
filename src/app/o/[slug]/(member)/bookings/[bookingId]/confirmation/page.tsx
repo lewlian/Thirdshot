@@ -3,6 +3,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getOrgBySlug } from "@/lib/org-context";
 import { getPaymentStatus } from "@/lib/hitpay/client";
 import { sendBookingConfirmationEmail } from "@/lib/email/send";
@@ -29,8 +30,9 @@ interface ConfirmationPageProps {
   searchParams: Promise<{ status?: string }>;
 }
 
-async function fetchBooking(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, bookingId: string) {
-  const { data } = await supabase
+async function fetchBooking(bookingId: string) {
+  const adminClient = createAdminSupabaseClient();
+  const { data } = await adminClient
     .from('bookings')
     .select('*, payments(*), booking_slots(*, courts(*))')
     .eq('id', bookingId)
@@ -63,7 +65,8 @@ export default async function ConfirmationPage({
     redirect("/login");
   }
 
-  let booking = await fetchBooking(supabase, bookingId);
+  const adminClient = createAdminSupabaseClient();
+  let booking = await fetchBooking(bookingId);
 
   if (!booking) {
     notFound();
@@ -94,8 +97,8 @@ export default async function ConfirmationPage({
       );
 
       if (hitpayStatus.status === "completed" || completedPayment) {
-        // Update our database to reflect the payment
-        await supabase
+        // Update our database to reflect the payment (admin client bypasses RLS)
+        await adminClient
           .from('bookings')
           .update({
             status: "CONFIRMED",
@@ -103,7 +106,7 @@ export default async function ConfirmationPage({
           })
           .eq('id', bookingId);
 
-        await supabase
+        await adminClient
           .from('payments')
           .update({
             status: "COMPLETED",
@@ -113,7 +116,7 @@ export default async function ConfirmationPage({
           .eq('id', payment.id);
 
         // Refresh booking data
-        booking = await fetchBooking(supabase, bookingId);
+        booking = await fetchBooking(bookingId);
 
         if (!booking) {
           notFound();
@@ -141,13 +144,13 @@ export default async function ConfirmationPage({
         }
       } else if (hitpayStatus.status === "failed" || failedPayment) {
         // Update payment status to FAILED
-        await supabase
+        await adminClient
           .from('payments')
           .update({ status: "FAILED" })
           .eq('id', payment.id);
 
         // Refresh booking data to reflect the failed payment
-        booking = await fetchBooking(supabase, bookingId);
+        booking = await fetchBooking(bookingId);
 
         if (!booking) {
           notFound();
