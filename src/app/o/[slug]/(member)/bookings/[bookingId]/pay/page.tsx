@@ -87,7 +87,7 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
 
   // If no payment record exists (edge case), create one
   if (!payment && sortedSlots.length > 0) {
-    const { data: newPayment } = await adminClient
+    const { data: newPayment, error: insertErr } = await adminClient
       .from('payments')
       .insert({
         id: crypto.randomUUID(),
@@ -100,7 +100,10 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
       })
       .select()
       .single();
-    if (newPayment) {
+    if (insertErr) {
+      console.error("Failed to create payment record:", insertErr.message);
+      initError = `Payment record creation failed: ${insertErr.message}`;
+    } else if (newPayment) {
       payment = newPayment;
     }
   }
@@ -110,39 +113,62 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
     const startTimeSGT = toZonedTime(firstSlot.start_time, TIMEZONE);
     const slotCount = sortedSlots.length;
     const courtNames = [...new Set(sortedSlots.map((s: { courts?: { name?: string } }) => s.courts?.name))].join(", ");
+    const userEmail = booking.users?.email || "";
+    const userName = booking.users?.name || undefined;
 
-    try {
-      const hitpayResponse = await createBookingPayment({
-        bookingId: booking.id,
-        amountCents: booking.total_cents,
-        currency: booking.currency,
-        userEmail: booking.users?.email || "",
-        userName: booking.users?.name || undefined,
-        courtName: slotCount > 1 ? `${slotCount} slots (${courtNames})` : firstSlot.courts?.name || "",
-        bookingDate: format(startTimeSGT, "d MMM yyyy"),
-        bookingTime: slotCount > 1 ? `${slotCount} time slots` : format(startTimeSGT, "h:mm a"),
-        orgSlug: slug,
-      });
+    // Validate required data before calling HitPay
+    if (!userEmail) {
+      initError = "User email is missing — cannot create HitPay payment";
+      console.error("HitPay skipped: no user email. booking.users:", JSON.stringify(booking.users));
+    } else if (booking.total_cents <= 0) {
+      initError = "Booking amount is zero — cannot create HitPay payment";
+    } else {
+      try {
+        const hitpayResponse = await createBookingPayment({
+          bookingId: booking.id,
+          amountCents: booking.total_cents,
+          currency: booking.currency,
+          userEmail,
+          userName,
+          courtName: slotCount > 1 ? `${slotCount} slots (${courtNames})` : firstSlot.courts?.name || "",
+          bookingDate: format(startTimeSGT, "d MMM yyyy"),
+          bookingTime: slotCount > 1 ? `${slotCount} time slots` : format(startTimeSGT, "h:mm a"),
+          orgSlug: slug,
+        });
 
-      // Update payment with HitPay details (use admin client)
-      const { data: updatedPayment } = await adminClient
-        .from('payments')
-        .update({
-          hitpay_payment_id: hitpayResponse.id,
-          hitpay_payment_url: hitpayResponse.url,
-        })
-        .eq('id', payment.id)
-        .select()
-        .single();
+        // Update payment with HitPay details (use admin client)
+        const { data: updatedPayment, error: updateErr } = await adminClient
+          .from('payments')
+          .update({
+            hitpay_payment_id: hitpayResponse.id,
+            hitpay_payment_url: hitpayResponse.url,
+          })
+          .eq('id', payment.id)
+          .select()
+          .single();
 
-      if (updatedPayment) {
-        payment = updatedPayment;
+        if (updateErr) {
+          console.error("Failed to update payment with HitPay details:", updateErr.message);
+          // HitPay payment was created but DB update failed — still try to use the URL
+          initError = null; // clear since we can still redirect
+        }
+
+        if (updatedPayment) {
+          payment = updatedPayment;
+        } else if (hitpayResponse.url) {
+          // DB update failed but we have the URL — use it directly
+          payment = { ...payment, hitpay_payment_url: hitpayResponse.url, hitpay_payment_id: hitpayResponse.id };
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        console.error("Failed to create HitPay payment:", errorMsg);
+        initError = errorMsg;
       }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      console.error("Failed to create HitPay payment:", errorMsg);
-      initError = errorMsg;
     }
+  } else if (!payment && sortedSlots.length > 0 && !initError) {
+    initError = "Payment record could not be created";
+  } else if (sortedSlots.length === 0 && !initError) {
+    initError = "No booking slots found";
   }
 
   // Format slots for display

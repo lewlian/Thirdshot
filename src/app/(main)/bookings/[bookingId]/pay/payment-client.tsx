@@ -56,11 +56,14 @@ export function PaymentClient({ booking, paymentUrl, savedCard, linkPrefix = "",
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [expired, setExpired] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<PaymentOption>(
     savedCard ? "saved_card" : "new_payment"
   );
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hasPaymentError = !!initError || (!paymentUrl && !(selectedMethod === "saved_card" && savedCard));
 
   // Calculate time remaining
   useEffect(() => {
@@ -81,12 +84,16 @@ export function PaymentClient({ booking, paymentUrl, savedCard, linkPrefix = "",
 
       if (remaining <= 0) {
         clearInterval(interval);
-        router.push(`${linkPrefix}/courts?error=booking_expired`);
+        setExpired(true);
+        // Don't auto-redirect if there's an error to show — let user read it
+        if (!hasPaymentError) {
+          router.push(`${linkPrefix}/courts?error=booking_expired`);
+        }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [booking.expiresAt, router]);
+  }, [booking.expiresAt, router, linkPrefix, hasPaymentError]);
 
   const formatTimeLeft = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -243,8 +250,25 @@ export function PaymentClient({ booking, paymentUrl, savedCard, linkPrefix = "",
             </div>
           )}
 
+          {/* Expired Banner */}
+          {expired && (
+            <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="font-medium text-red-700 dark:text-red-300">Booking expired</p>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                This booking has expired. Please create a new booking.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => router.push(`${linkPrefix}/courts`)}
+                className="mt-3"
+              >
+                Book Again
+              </Button>
+            </div>
+          )}
+
           {/* Payment Button */}
-          {(paymentUrl || (selectedMethod === "saved_card" && savedCard)) ? (
+          {!expired && (paymentUrl || (selectedMethod === "saved_card" && savedCard)) ? (
             <Button
               onClick={handlePayNow}
               className="w-full h-14 text-lg"
@@ -257,25 +281,32 @@ export function PaymentClient({ booking, paymentUrl, savedCard, linkPrefix = "",
               )}
               {getPayButtonText()}
             </Button>
-          ) : (
+          ) : !expired ? (
             <div className="text-center py-4">
-              <p className="text-red-600 dark:text-red-400">
-                Failed to initialize payment. Please try again or contact support.
+              <p className="text-red-600 dark:text-red-400 font-medium">
+                Failed to initialize payment.
               </p>
               {initError && (
-                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto break-words">
-                  Error: {initError}
+                <p className="text-sm text-red-500 mt-2 max-w-md mx-auto break-words bg-red-50 dark:bg-red-950 p-3 rounded border border-red-200 dark:border-red-800">
+                  {initError}
                 </p>
               )}
-              <Button
-                variant="outline"
-                onClick={() => router.refresh()}
-                className="mt-4"
-              >
-                Retry
-              </Button>
+              <div className="flex gap-3 justify-center mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => router.refresh()}
+                >
+                  Retry
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`${linkPrefix}/courts`)}
+                >
+                  Back to Courts
+                </Button>
+              </div>
             </div>
-          )}
+          ) : null}
 
           {/* Payment Info */}
           <div className="text-sm text-gray-500 dark:text-gray-400 text-center space-y-1">
