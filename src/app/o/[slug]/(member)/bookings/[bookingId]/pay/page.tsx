@@ -195,7 +195,7 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
         slots: formattedSlots,
         totalCents: booking.total_cents,
         currency: booking.currency,
-        expiresAt: booking.expires_at || null,
+        expiresAt: booking.expires_at ? new Date(booking.expires_at).toISOString() : null,
       }}
       paymentUrl={payment?.hitpay_payment_url || null}
       savedCard={savedCard}

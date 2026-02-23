@@ -59,6 +59,8 @@ export default async function BookingsPage({ params }: BookingsPageProps) {
 
   const allBookings = (bookings || []).map((b) => ({
     ...b,
+    // Ensure expires_at has timezone info for correct client-side parsing (TIMESTAMP without tz loses Z suffix)
+    expires_at: b.expires_at ? new Date(b.expires_at).toISOString() : b.expires_at,
     booking_slots: [...(b.booking_slots || [])].sort(
       (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
     ),
