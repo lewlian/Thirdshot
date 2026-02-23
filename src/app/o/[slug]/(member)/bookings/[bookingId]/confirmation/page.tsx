@@ -77,10 +77,14 @@ export default async function ConfirmationPage({
     notFound();
   }
 
-  const payment = booking.payments;
+  // Fetch payment separately to avoid one-to-one vs array ambiguity
+  const { data: payment } = await adminClient
+    .from('payments')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
 
   // If still pending and we have a HitPay payment ID, check the payment status
-  // This handles the case when webhooks aren't available (localhost dev)
   if (
     booking.status === "PENDING_PAYMENT" &&
     payment?.hitpay_payment_id
@@ -167,7 +171,12 @@ export default async function ConfirmationPage({
     notFound();
   }
 
-  const currentPayment = booking.payments;
+  // Re-fetch payment after potential status update
+  const { data: currentPayment } = await adminClient
+    .from('payments')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
   const sortedSlots = [...(booking.booking_slots || [])].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   );

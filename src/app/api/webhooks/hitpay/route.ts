@@ -51,7 +51,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const payment = booking.payments;
+    // Fetch payment separately to avoid one-to-one vs array ambiguity
+    const { data: payment } = await adminClient
+      .from('payments')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .maybeSingle();
     if (!payment) {
       console.error("Payment record not found for booking:", bookingId);
       return NextResponse.json(

@@ -81,8 +81,13 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
       new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   );
 
-  // Create HitPay payment if not already created
-  let payment = booking.payments || null;
+  // Fetch payment separately to avoid one-to-one vs array ambiguity
+  const { data: paymentRecord } = await adminClient
+    .from('payments')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
+  let payment = paymentRecord;
   let initError: string | null = null;
 
   // If no payment record exists (edge case), create one
