@@ -7,6 +7,7 @@ const getNavItems = (slug: string) => [
   { href: `/o/${slug}/admin`, label: "Dashboard" },
   { href: `/o/${slug}/admin/courts`, label: "Courts" },
   { href: `/o/${slug}/admin/bookings`, label: "Bookings" },
+  { href: `/o/${slug}/admin/calendar`, label: "Calendar" },
   { href: `/o/${slug}/admin/members`, label: "Members" },
   { href: `/o/${slug}/admin/finance`, label: "Finance" },
   { href: `/o/${slug}/admin/audit-log`, label: "Audit Log" },
