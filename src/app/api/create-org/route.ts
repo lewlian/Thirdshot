@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, getUser } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { z } from "zod";
 
 export const createOrgSchema = z.object({
@@ -75,8 +76,11 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
+    // Use admin client for all inserts to bypass RLS
+    const adminClient = createAdminSupabaseClient();
+
     // Check slug uniqueness
-    const { data: existing } = await supabase
+    const { data: existing } = await adminClient
       .from("organizations")
       .select("id")
       .eq("slug", data.slug)
@@ -91,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     // Create organization
     const orgId = crypto.randomUUID();
-    const { error: orgError } = await supabase.from("organizations").insert({
+    const { error: orgError } = await adminClient.from("organizations").insert({
       id: orgId,
       name: data.name,
       slug: data.slug,
@@ -122,7 +126,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Add creator as owner
-    const { error: memberError } = await supabase
+    const { error: memberError } = await adminClient
       .from("organization_members")
       .insert({
         id: crypto.randomUUID(),
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
     if (memberError) {
       console.error("Add owner error:", memberError);
       // Clean up org
-      await supabase.from("organizations").delete().eq("id", orgId);
+      await adminClient.from("organizations").delete().eq("id", orgId);
       return NextResponse.json(
         { error: "Failed to set up organization" },
         { status: 500 }
@@ -155,7 +159,7 @@ export async function POST(request: NextRequest) {
       close_time: "22:00",
     }));
 
-    const { error: courtsError } = await supabase
+    const { error: courtsError } = await adminClient
       .from("courts")
       .insert(courtInserts);
 
@@ -165,7 +169,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a default membership tier
-    await supabase.from("membership_tiers").insert({
+    await adminClient.from("membership_tiers").insert({
       id: crypto.randomUUID(),
       organization_id: orgId,
       name: "Member",
@@ -182,7 +186,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create default waiver
-    await supabase.from("waivers").insert({
+    await adminClient.from("waivers").insert({
       id: crypto.randomUUID(),
       organization_id: orgId,
       title: "Liability Waiver",
@@ -207,7 +211,7 @@ I have read this waiver, understand its terms, and sign it voluntarily.`,
     });
 
     // Create audit log
-    await supabase.from("admin_audit_logs").insert({
+    await adminClient.from("admin_audit_logs").insert({
       id: crypto.randomUUID(),
       organization_id: orgId,
       admin_id: dbUser.id,
