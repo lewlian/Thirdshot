@@ -34,9 +34,10 @@ interface Court {
 interface CourtFormProps {
   court?: Court;
   orgId?: string;
+  linkPrefix?: string;
 }
 
-export function CourtForm({ court, orgId }: CourtFormProps) {
+export function CourtForm({ court, orgId, linkPrefix }: CourtFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function CourtForm({ court, orgId }: CourtFormProps) {
         : await createCourt(formData);
 
       if (result.success) {
-        router.push("/admin/courts");
+        router.push(linkPrefix ? `${linkPrefix}/admin/courts` : "/admin/courts");
       } else {
         setError(result.error || "Something went wrong");
       }
@@ -68,7 +69,7 @@ export function CourtForm({ court, orgId }: CourtFormProps) {
       const result = await deleteCourt(court!.id, orgId || "");
 
       if (result.success) {
-        router.push("/admin/courts");
+        router.push(linkPrefix ? `${linkPrefix}/admin/courts` : "/admin/courts");
       } else {
         setError(result.error || "Failed to delete court");
       }

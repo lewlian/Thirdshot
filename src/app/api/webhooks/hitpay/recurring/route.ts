@@ -176,6 +176,7 @@ async function handleCardSaved(payload: RecurringWebhookPayload) {
     await adminClient
       .from('saved_payment_methods')
       .insert({
+        id: crypto.randomUUID(),
         organization_id: organizationId,
         user_id: user.id,
         hitpay_billing_id: recurring_billing_id,

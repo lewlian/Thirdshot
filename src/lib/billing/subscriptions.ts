@@ -24,6 +24,7 @@ export async function createSubscription(input: CreateSubscriptionInput) {
   const { data, error } = await supabase
     .from("membership_subscriptions")
     .insert({
+      id: crypto.randomUUID(),
       organization_id: input.organizationId,
       member_id: input.memberId,
       tier_id: input.tierId,

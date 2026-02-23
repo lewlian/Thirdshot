@@ -36,7 +36,7 @@ export default async function EditCourtPage({ params }: EditCourtPageProps) {
           <CardTitle>Court Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <CourtForm court={court} orgId={org.id} />
+          <CourtForm court={court} orgId={org.id} linkPrefix={`/o/${slug}`} />
         </CardContent>
       </Card>
     </div>
