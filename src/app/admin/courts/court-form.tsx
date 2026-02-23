@@ -26,6 +26,9 @@ interface Court {
   description: string | null;
   price_per_hour_cents: number;
   is_active: boolean;
+  open_time?: string;
+  close_time?: string;
+  slot_duration_minutes?: number;
 }
 
 interface CourtFormProps {
@@ -114,6 +117,43 @@ export function CourtForm({ court, orgId }: CourtFormProps) {
             court ? (court.price_per_hour_cents / 100).toFixed(2) : ""
           }
           placeholder="e.g., 20.00"
+          required
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="openTime">Opens At *</Label>
+          <Input
+            id="openTime"
+            name="openTime"
+            type="time"
+            defaultValue={court?.open_time || "07:00"}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="closeTime">Closes At *</Label>
+          <Input
+            id="closeTime"
+            name="closeTime"
+            type="time"
+            defaultValue={court?.close_time || "22:00"}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="slotDuration">Slot Duration (minutes) *</Label>
+        <Input
+          id="slotDuration"
+          name="slotDuration"
+          type="number"
+          min="15"
+          max="120"
+          step="15"
+          defaultValue={court?.slot_duration_minutes || 60}
           required
         />
       </div>

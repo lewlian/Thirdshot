@@ -80,6 +80,10 @@ export async function createCourt(formData: FormData) {
   try {
     const supabase = await createServerSupabaseClient();
 
+    const openTime = (formData.get("openTime") as string) || "07:00";
+    const closeTime = (formData.get("closeTime") as string) || "22:00";
+    const slotDuration = parseInt((formData.get("slotDuration") as string) || "60", 10);
+
     const { data: court, error } = await supabase
       .from('courts')
       .insert({
@@ -89,6 +93,9 @@ export async function createCourt(formData: FormData) {
         price_per_hour_cents: parsed.data.pricePerHourCents,
         is_active: parsed.data.isActive,
         organization_id: orgId,
+        open_time: openTime,
+        close_time: closeTime,
+        slot_duration_minutes: slotDuration,
       })
       .select()
       .single();
@@ -137,14 +144,23 @@ export async function updateCourt(courtId: string, formData: FormData) {
   try {
     const supabase = await createServerSupabaseClient();
 
+    const openTime = formData.get("openTime") as string;
+    const closeTime = formData.get("closeTime") as string;
+    const slotDuration = formData.get("slotDuration") as string;
+
+    const updateData: Record<string, unknown> = {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      price_per_hour_cents: parsed.data.pricePerHourCents,
+      is_active: parsed.data.isActive,
+    };
+    if (openTime) updateData.open_time = openTime;
+    if (closeTime) updateData.close_time = closeTime;
+    if (slotDuration) updateData.slot_duration_minutes = parseInt(slotDuration, 10);
+
     const { data: court, error } = await supabase
       .from('courts')
-      .update({
-        name: parsed.data.name,
-        description: parsed.data.description,
-        price_per_hour_cents: parsed.data.pricePerHourCents,
-        is_active: parsed.data.isActive,
-      })
+      .update(updateData)
       .eq('id', courtId)
       .eq('organization_id', orgId)
       .select()

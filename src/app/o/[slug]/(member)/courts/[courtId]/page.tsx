@@ -69,6 +69,8 @@ export default async function CourtPage({ params }: CourtPageProps) {
           court={court}
           bookableDates={bookableDates}
           maxSlots={maxSlots}
+          orgId={org.id}
+          orgSlug={slug}
         />
       </div>
     </div>
