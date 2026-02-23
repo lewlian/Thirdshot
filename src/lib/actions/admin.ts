@@ -39,6 +39,7 @@ async function createAuditLog(
   await supabase
     .from('admin_audit_logs')
     .insert({
+      id: crypto.randomUUID(),
       admin_id: adminId,
       organization_id: orgId,
       action,
@@ -82,6 +83,7 @@ export async function createCourt(formData: FormData) {
     const { data: court, error } = await supabase
       .from('courts')
       .insert({
+        id: crypto.randomUUID(),
         name: parsed.data.name,
         description: parsed.data.description,
         price_per_hour_cents: parsed.data.pricePerHourCents,
@@ -262,6 +264,7 @@ export async function createCourtBlock(formData: FormData) {
     const { data: block, error } = await supabase
       .from('court_blocks')
       .insert({
+        id: crypto.randomUUID(),
         court_id: parsed.data.courtId,
         start_time: parsed.data.startTime.toISOString(),
         end_time: parsed.data.endTime.toISOString(),
