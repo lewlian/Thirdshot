@@ -89,7 +89,13 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     bookingStatus = "EXPIRED";
   }
 
-  const payment = booking.payments;
+  // Fetch payment separately to avoid one-to-one vs array ambiguity
+  const adminDb = createAdminSupabaseClient();
+  const { data: payment } = await adminDb
+    .from('payments')
+    .select('*')
+    .eq('booking_id', bookingId)
+    .maybeSingle();
   const sortedSlots = [...(booking.booking_slots || [])].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   );
