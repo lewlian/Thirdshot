@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCourtAvailability } from "@/lib/booking/availability";
+import { getCourtAvailability, getUserDailySlotsCount } from "@/lib/booking/availability";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import { parseISO, isValid } from "date-fns";
 import {
   checkRateLimit,
@@ -68,7 +69,37 @@ export async function GET(
 
   try {
     const slots = await getCourtAvailability(courtId, date, orgId);
-    return NextResponse.json({ slots });
+
+    // If user is authenticated, return their daily slot usage
+    let dailySlotsUsed = 0;
+    let maxDailySlots = 0;
+    try {
+      const user = await getUser();
+      if (user) {
+        const supabase = await createServerSupabaseClient();
+        const { data: dbUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('supabase_id', user.id)
+          .single();
+
+        if (dbUser) {
+          dailySlotsUsed = await getUserDailySlotsCount(dbUser.id, date, orgId);
+        }
+
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('max_consecutive_slots')
+          .eq('id', orgId)
+          .single();
+
+        maxDailySlots = org?.max_consecutive_slots || 3;
+      }
+    } catch {
+      // Auth check is best-effort; don't fail the whole request
+    }
+
+    return NextResponse.json({ slots, dailySlotsUsed, maxDailySlots });
   } catch {
     return NextResponse.json(
       { error: "Failed to fetch availability" },

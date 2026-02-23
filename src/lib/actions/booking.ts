@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { checkSlotAvailability } from "@/lib/booking/availability";
+import { checkSlotAvailability, getUserDailySlotsCount } from "@/lib/booking/availability";
 import { calculateBookingPrice } from "@/lib/booking/pricing";
 import { sendBookingCancelledEmail } from "@/lib/email/send";
 import { createBookingSchema } from "@/lib/validations/booking";
@@ -95,6 +95,29 @@ export async function createBooking(
 
   if (!court || !court.is_active) {
     return { error: "Court not available" };
+  }
+
+  // Check daily slot limit
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('max_consecutive_slots')
+    .eq('id', orgId)
+    .single();
+
+  const maxDailySlots = org?.max_consecutive_slots || 3;
+  const dailySlotsUsed = await getUserDailySlotsCount(
+    dbUser.id,
+    parseISO(date),
+    orgId
+  );
+
+  if (dailySlotsUsed + slots > maxDailySlots) {
+    const remaining = Math.max(0, maxDailySlots - dailySlotsUsed);
+    return {
+      error: remaining === 0
+        ? `You've reached the daily booking limit of ${maxDailySlots} slot${maxDailySlots !== 1 ? "s" : ""} for this date.`
+        : `You can only book ${remaining} more slot${remaining !== 1 ? "s" : ""} on this date (${dailySlotsUsed}/${maxDailySlots} used).`,
+    };
   }
 
   // Parse start time
@@ -207,6 +230,34 @@ export async function createMultipleBookings(
 
   if (slots.length === 0) {
     return { error: "No slots selected" };
+  }
+
+  // Check daily slot limit — group requested slots by date and check each
+  const { data: org } = await supabase
+    .from('organizations')
+    .select('max_consecutive_slots')
+    .eq('id', orgId)
+    .single();
+
+  const maxDailySlots = org?.max_consecutive_slots || 3;
+
+  // All slots are typically on the same date, but group just in case
+  const slotsByDate = new Map<string, number>();
+  for (const slot of slots) {
+    const dateKey = new Date(slot.startTime).toISOString().split('T')[0];
+    slotsByDate.set(dateKey, (slotsByDate.get(dateKey) || 0) + 1);
+  }
+
+  for (const [dateKey, newSlotCount] of slotsByDate) {
+    const dailyUsed = await getUserDailySlotsCount(dbUser.id, new Date(dateKey), orgId);
+    if (dailyUsed + newSlotCount > maxDailySlots) {
+      const remaining = Math.max(0, maxDailySlots - dailyUsed);
+      return {
+        error: remaining === 0
+          ? `You've reached the daily booking limit of ${maxDailySlots} slot${maxDailySlots !== 1 ? "s" : ""} for this date.`
+          : `You can only book ${remaining} more slot${remaining !== 1 ? "s" : ""} on this date (${dailyUsed}/${maxDailySlots} used).`,
+      };
+    }
   }
 
   try {

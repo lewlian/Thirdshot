@@ -43,6 +43,8 @@ export function CourtBookingForm({
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [selectedSlotIndices, setSelectedSlotIndices] = useState<number[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [dailySlotsUsed, setDailySlotsUsed] = useState(0);
+  const [maxDailySlots, setMaxDailySlots] = useState(maxSlots);
 
   // Fetch slots when date changes
   useEffect(() => {
@@ -67,6 +69,12 @@ export function CourtBookingForm({
             }))
           );
         }
+        if (typeof data.dailySlotsUsed === "number") {
+          setDailySlotsUsed(data.dailySlotsUsed);
+        }
+        if (typeof data.maxDailySlots === "number" && data.maxDailySlots > 0) {
+          setMaxDailySlots(data.maxDailySlots);
+        }
       } catch {
         toast.error("Failed to load available slots");
       } finally {
@@ -76,6 +84,10 @@ export function CourtBookingForm({
 
     fetchSlots();
   }, [selectedDate, court.id]);
+
+  // Remaining slots the user can book today
+  const remainingDailySlots = Math.max(0, maxDailySlots - dailySlotsUsed);
+  const effectiveMaxSlots = Math.min(maxSlots, remainingDailySlots);
 
   const handleSlotClick = (index: number) => {
     setSelectedSlotIndices((prev) => {
@@ -94,7 +106,7 @@ export function CourtBookingForm({
         return [index];
       }
 
-      if (prev.length >= maxSlots) {
+      if (prev.length >= effectiveMaxSlots) {
         return prev;
       }
 
@@ -213,13 +225,35 @@ export function CourtBookingForm({
               Select Time
             </CardTitle>
             <CardDescription className="text-sm">
-              Select up to {maxSlots} consecutive hours
+              {remainingDailySlots <= 0
+                ? "Daily booking limit reached"
+                : `Select up to ${effectiveMaxSlots} consecutive hour${effectiveMaxSlots !== 1 ? "s" : ""}`}
+              {maxDailySlots > 0 && (
+                <span className="ml-2 inline-flex items-center">
+                  <Badge
+                    variant={remainingDailySlots <= 0 ? "destructive" : "secondary"}
+                    className="text-xs font-normal"
+                  >
+                    {dailySlotsUsed}/{maxDailySlots} daily slots used
+                  </Badge>
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoadingSlots ? (
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent"></div>
+              </div>
+            ) : remainingDailySlots <= 0 ? (
+              <div className="text-center py-12">
+                <Clock className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground font-medium">
+                  You&apos;ve reached your daily booking limit ({maxDailySlots} slot{maxDailySlots !== 1 ? "s" : ""})
+                </p>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Try selecting a different date
+                </p>
               </div>
             ) : slots.length === 0 ? (
               <div className="text-center py-12">
@@ -233,7 +267,7 @@ export function CourtBookingForm({
                 slots={slots}
                 selectedSlots={selectedSlotIndices}
                 onSlotClick={handleSlotClick}
-                maxSlots={maxSlots}
+                maxSlots={effectiveMaxSlots}
               />
             )}
           </CardContent>

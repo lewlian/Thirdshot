@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { addDays, startOfDay, endOfDay, setHours, setMinutes, isBefore, isAfter } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import type { TimeSlot } from "@/types/court";
@@ -245,4 +246,32 @@ export async function checkSlotAvailability(
   }
 
   return { available: true };
+}
+
+/**
+ * Count how many booking slots a user has on a given date (across all courts).
+ * Includes CONFIRMED and PENDING_PAYMENT bookings (not CANCELLED/EXPIRED).
+ */
+export async function getUserDailySlotsCount(
+  userId: string,
+  date: Date,
+  orgId: string
+): Promise<number> {
+  const adminClient = createAdminSupabaseClient();
+
+  // Compute day boundaries in SGT → UTC
+  const dayInSGT = toZonedTime(date, TIMEZONE);
+  const dayStartUTC = fromZonedTime(startOfDay(dayInSGT), TIMEZONE);
+  const dayEndUTC = fromZonedTime(startOfDay(addDays(dayInSGT, 1)), TIMEZONE);
+
+  const { count } = await adminClient
+    .from('booking_slots')
+    .select('*, bookings!inner(status, user_id, organization_id)', { count: 'exact', head: true })
+    .eq('bookings.user_id', userId)
+    .eq('bookings.organization_id', orgId)
+    .gte('start_time', dayStartUTC.toISOString())
+    .lt('start_time', dayEndUTC.toISOString())
+    .not('bookings.status', 'in', '("CANCELLED","EXPIRED")');
+
+  return count || 0;
 }
