@@ -3,6 +3,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getOrgBySlug } from "@/lib/org-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,25 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     notFound();
   }
 
+  // Check if a PENDING_PAYMENT booking has expired and mark it
+  let bookingStatus = booking.status;
+  if (
+    bookingStatus === "PENDING_PAYMENT" &&
+    booking.expires_at &&
+    new Date() > new Date(booking.expires_at)
+  ) {
+    const adminClient = createAdminSupabaseClient();
+    await adminClient
+      .from('bookings')
+      .update({
+        status: "EXPIRED",
+        cancelled_at: new Date().toISOString(),
+        cancel_reason: "Payment timeout - booking expired",
+      })
+      .eq('id', bookingId);
+    bookingStatus = "EXPIRED";
+  }
+
   const payment = booking.payments;
   const sortedSlots = [...(booking.booking_slots || [])].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
@@ -79,9 +99,9 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
   const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
 
   const isUpcoming = firstSlot && new Date(firstSlot.start_time) > new Date();
-  const canCancel = booking.status === "CONFIRMED" && isUpcoming;
-  const isPending = booking.status === "PENDING_PAYMENT";
-  const isConfirmed = booking.status === "CONFIRMED";
+  const canCancel = bookingStatus === "CONFIRMED" && isUpcoming;
+  const isPending = bookingStatus === "PENDING_PAYMENT";
+  const isConfirmed = bookingStatus === "CONFIRMED";
 
   const lastSlot = sortedSlots[sortedSlots.length - 1];
   const calendarCourtName = sortedSlots.length > 1
@@ -106,7 +126,7 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     COMPLETED: { label: "Completed", variant: "outline" },
   };
 
-  const status = statusConfig[booking.status] || { label: booking.status, variant: "outline" as const };
+  const status = statusConfig[bookingStatus] || { label: bookingStatus, variant: "outline" as const };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -197,10 +217,14 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
           </div>
 
           {/* Cancellation Reason */}
-          {(booking.status === "CANCELLED" || booking.status === "EXPIRED") && booking.cancel_reason && (
+          {(bookingStatus === "CANCELLED" || bookingStatus === "EXPIRED") && (
             <div className="border-t pt-4 space-y-2">
-              <h4 className="font-medium text-sm">Cancellation Reason</h4>
-              <p className="text-sm text-muted-foreground">{booking.cancel_reason}</p>
+              <h4 className="font-medium text-sm">
+                {bookingStatus === "EXPIRED" ? "Expiration Reason" : "Cancellation Reason"}
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                {booking.cancel_reason || "Payment timeout - booking expired"}
+              </p>
               {booking.cancelled_at && (
                 <p className="text-xs text-muted-foreground">
                   Cancelled on {format(toZonedTime(booking.cancelled_at, TIMEZONE), "d MMM yyyy, h:mm a")}

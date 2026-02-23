@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getOrgBySlug } from "@/lib/org-context";
 import { createBookingPayment } from "@/lib/hitpay/client";
 import { getSavedPaymentMethod } from "@/lib/actions/payment-methods";
@@ -23,6 +24,7 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
   }
 
   const supabase = await createServerSupabaseClient();
+  const adminClient = createAdminSupabaseClient();
 
   const { data: dbUser } = await supabase
     .from('users')
@@ -34,7 +36,8 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
     redirect("/login");
   }
 
-  const { data: booking } = await supabase
+  // Use admin client to fetch booking (bypasses RLS for reliable data access)
+  const { data: booking } = await adminClient
     .from('bookings')
     .select('*, users(*), payments(*), booking_slots(*, courts(*))')
     .eq('id', bookingId)
@@ -59,10 +62,9 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
     redirect(`/o/${slug}/bookings/${bookingId}?error=expired`);
   }
 
-  // Check if booking has expired
+  // Check if booking has expired by time
   if (booking.expires_at && new Date() > new Date(booking.expires_at)) {
-    // Mark as expired
-    await supabase
+    await adminClient
       .from('bookings')
       .update({
         status: "EXPIRED",
@@ -75,17 +77,39 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
 
   // Sort slots
   const sortedSlots = [...(booking.booking_slots || [])].sort(
-    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    (a: { start_time: string }, b: { start_time: string }) =>
+      new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
   );
 
   // Create HitPay payment if not already created
   let payment = booking.payments || null;
+  let initError: string | null = null;
+
+  // If no payment record exists (edge case), create one
+  if (!payment && sortedSlots.length > 0) {
+    const { data: newPayment } = await adminClient
+      .from('payments')
+      .insert({
+        id: crypto.randomUUID(),
+        organization_id: booking.organization_id,
+        booking_id: booking.id,
+        user_id: booking.user_id,
+        amount_cents: booking.total_cents,
+        currency: booking.currency,
+        status: 'PENDING',
+      })
+      .select()
+      .single();
+    if (newPayment) {
+      payment = newPayment;
+    }
+  }
 
   if (payment && !payment.hitpay_payment_id && sortedSlots.length > 0) {
     const firstSlot = sortedSlots[0];
     const startTimeSGT = toZonedTime(firstSlot.start_time, TIMEZONE);
     const slotCount = sortedSlots.length;
-    const courtNames = [...new Set(sortedSlots.map((s) => s.courts?.name))].join(", ");
+    const courtNames = [...new Set(sortedSlots.map((s: { courts?: { name?: string } }) => s.courts?.name))].join(", ");
 
     try {
       const hitpayResponse = await createBookingPayment({
@@ -100,8 +124,8 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
         orgSlug: slug,
       });
 
-      // Update payment with HitPay details
-      const { data: updatedPayment } = await supabase
+      // Update payment with HitPay details (use admin client)
+      const { data: updatedPayment } = await adminClient
         .from('payments')
         .update({
           hitpay_payment_id: hitpayResponse.id,
@@ -115,13 +139,14 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
         payment = updatedPayment;
       }
     } catch (error) {
-      console.error("Failed to create HitPay payment:", error);
-      // Continue with page render, will show error
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      console.error("Failed to create HitPay payment:", errorMsg);
+      initError = errorMsg;
     }
   }
 
   // Format slots for display
-  const formattedSlots = sortedSlots.map((slot) => {
+  const formattedSlots = sortedSlots.map((slot: { id: string; start_time: string; end_time: string; courts?: { name?: string } }) => {
     const startTimeSGT = toZonedTime(slot.start_time, TIMEZONE);
     const endTimeSGT = toZonedTime(slot.end_time, TIMEZONE);
     return {
@@ -148,6 +173,8 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
       }}
       paymentUrl={payment?.hitpay_payment_url || null}
       savedCard={savedCard}
+      linkPrefix={`/o/${slug}`}
+      initError={initError}
     />
   );
 }

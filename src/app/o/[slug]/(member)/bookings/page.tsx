@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getOrgBySlug } from "@/lib/org-context";
 import { BookingList } from "@/components/booking/booking-list";
 import { Button } from "@/components/ui/button";
@@ -34,8 +35,9 @@ export default async function BookingsPage({ params }: BookingsPageProps) {
 
   const now = new Date();
 
-  // First, expire any pending bookings that have timed out
-  await supabase
+  // Expire pending bookings that have timed out (use admin client to bypass RLS)
+  const adminClient = createAdminSupabaseClient();
+  await adminClient
     .from('bookings')
     .update({
       status: "EXPIRED",

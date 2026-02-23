@@ -61,33 +61,35 @@ export function BookingCard({ booking, linkPrefix = "" }: BookingCardProps) {
   const bookingTypeLabel = typeConfig[booking.type] || booking.type;
 
   // Countdown timer for pending payments
-  const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [hasExpired, setHasExpired] = useState(false);
+  const initialTimeLeft = isPending && booking.expires_at
+    ? Math.max(0, Math.floor((new Date(booking.expires_at).getTime() - Date.now()) / 1000))
+    : null;
+  const [timeLeft, setTimeLeft] = useState<number | null>(initialTimeLeft);
+  const [hasExpired, setHasExpired] = useState(initialTimeLeft === 0);
 
   useEffect(() => {
-    if (!isPending || !booking.expires_at) return;
+    if (!isPending || !booking.expires_at || hasExpired) {
+      if (hasExpired) {
+        // Refresh to let server expire the booking in DB
+        const timeout = setTimeout(() => router.refresh(), 2000);
+        return () => clearTimeout(timeout);
+      }
+      return;
+    }
 
     const calculateTimeLeft = () => {
       const expiresAt = new Date(booking.expires_at!);
-      const now = new Date();
-      const diff = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
+      const diff = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
       return diff;
     };
-
-    setTimeLeft(calculateTimeLeft());
 
     const interval = setInterval(() => {
       const remaining = calculateTimeLeft();
       setTimeLeft(remaining);
 
-      if (remaining <= 0 && !hasExpired) {
+      if (remaining <= 0) {
         clearInterval(interval);
         setHasExpired(true);
-
-        // Wait 2 seconds before refreshing to avoid jittery behavior
-        setTimeout(() => {
-          router.refresh();
-        }, 2000);
       }
     }, 1000);
 

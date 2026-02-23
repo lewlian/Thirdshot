@@ -42,6 +42,8 @@ interface PaymentClientProps {
   };
   paymentUrl: string | null;
   savedCard: SavedCardInfo | null;
+  linkPrefix?: string;
+  initError?: string | null;
 }
 
 const typeConfig: Record<BookingType, string> = {
@@ -50,7 +52,7 @@ const typeConfig: Record<BookingType, string> = {
   PRIVATE_COACHING: "Private Coaching",
 };
 
-export function PaymentClient({ booking, paymentUrl, savedCard }: PaymentClientProps) {
+export function PaymentClient({ booking, paymentUrl, savedCard, linkPrefix = "", initError }: PaymentClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
@@ -79,7 +81,7 @@ export function PaymentClient({ booking, paymentUrl, savedCard }: PaymentClientP
 
       if (remaining <= 0) {
         clearInterval(interval);
-        router.push(`/courts?error=booking_expired`);
+        router.push(`${linkPrefix}/courts?error=booking_expired`);
       }
     }, 1000);
 
@@ -111,7 +113,7 @@ export function PaymentClient({ booking, paymentUrl, savedCard }: PaymentClientP
         setError(result.error);
         setShowConfirmDialog(false);
       } else if (result.success) {
-        router.push(`/bookings/${booking.id}/confirmation`);
+        router.push(`${linkPrefix}/bookings/${booking.id}/confirmation`);
       }
     });
   };
@@ -126,7 +128,7 @@ export function PaymentClient({ booking, paymentUrl, savedCard }: PaymentClientP
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <Link href={`/courts`}>
+        <Link href={`${linkPrefix}/courts`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Courts
@@ -260,6 +262,11 @@ export function PaymentClient({ booking, paymentUrl, savedCard }: PaymentClientP
               <p className="text-red-600 dark:text-red-400">
                 Failed to initialize payment. Please try again or contact support.
               </p>
+              {initError && (
+                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto break-words">
+                  Error: {initError}
+                </p>
+              )}
               <Button
                 variant="outline"
                 onClick={() => router.refresh()}
