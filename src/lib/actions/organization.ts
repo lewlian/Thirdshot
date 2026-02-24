@@ -108,7 +108,7 @@ export async function updateOrgSettings(orgId: string, formData: FormData) {
       newData: parsed.data as unknown as Record<string, unknown>,
     });
 
-    revalidatePath(`/admin/settings`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update org settings:", error);
@@ -156,7 +156,7 @@ export async function updateBookingSettings(orgId: string, formData: FormData) {
       newData: parsed.data as unknown as Record<string, unknown>,
     });
 
-    revalidatePath(`/admin/settings`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update booking settings:", error);
@@ -198,7 +198,7 @@ export async function updateClubPage(orgId: string, formData: FormData) {
       newData: { hero_image_url: heroImageUrl, tagline, operating_hours: operatingHours },
     });
 
-    revalidatePath(`/admin/settings`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update club page:", error);
@@ -232,7 +232,7 @@ export async function updateBranding(orgId: string, formData: FormData) {
       newData: { primary_color: primaryColor },
     });
 
-    revalidatePath(`/admin/settings`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update branding:", error);

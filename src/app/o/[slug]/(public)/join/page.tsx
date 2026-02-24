@@ -41,6 +41,16 @@ export default async function JoinPage({ params }: JoinPageProps) {
         redirect(`/o/${slug}/courts`);
       }
 
+      // Find default/free tier for auto-join
+      const { data: defaultTier } = await adminClient
+        .from("membership_tiers")
+        .select("id")
+        .eq("organization_id", org.id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
       // Auto-join as member
       await adminClient.from("organization_members").insert({
         id: crypto.randomUUID(),
@@ -48,6 +58,7 @@ export default async function JoinPage({ params }: JoinPageProps) {
         user_id: dbUser.id,
         role: "member",
         membership_status: "active",
+        membership_tier_id: defaultTier?.id || null,
       });
 
       redirect(`/o/${slug}/courts`);

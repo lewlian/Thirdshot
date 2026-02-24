@@ -153,13 +153,15 @@ export async function signup(formData: FormData): Promise<AuthActionResult> {
   redirect(`/verify-email?email=${encodeURIComponent(parsed.data.email)}`);
 }
 
-export async function signInWithGoogle(): Promise<void> {
+export async function signInWithGoogle(formData?: FormData): Promise<void> {
   const supabase = await createServerSupabaseClient();
+  const redirectParam = formData?.get("redirect") as string;
+  const next = redirectParam && redirectParam.startsWith("/") ? redirectParam : "/dashboard";
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${getAppUrl()}/auth/callback`,
+      redirectTo: `${getAppUrl()}/auth/callback?next=${encodeURIComponent(next)}`,
     },
   });
 

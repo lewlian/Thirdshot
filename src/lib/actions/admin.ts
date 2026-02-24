@@ -106,8 +106,7 @@ export async function createCourt(formData: FormData) {
       newData: { name: court.name },
     });
 
-    revalidatePath("/admin/courts");
-    revalidatePath("/book");
+    revalidatePath("/", "layout");
 
     return { success: true, court };
   } catch (error) {
@@ -172,8 +171,7 @@ export async function updateCourt(courtId: string, formData: FormData) {
       newData: { name: court.name, changes: data },
     });
 
-    revalidatePath("/admin/courts");
-    revalidatePath("/book");
+    revalidatePath("/", "layout");
 
     return { success: true, court };
   } catch (error) {
@@ -219,8 +217,7 @@ export async function deleteCourt(courtId: string, orgId: string) {
       previousData: { name: court.name },
     });
 
-    revalidatePath("/admin/courts");
-    revalidatePath("/book");
+    revalidatePath("/", "layout");
 
     return { success: true };
   } catch (error) {
@@ -302,8 +299,7 @@ export async function createCourtBlock(formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/courts");
-    revalidatePath("/book");
+    revalidatePath("/", "layout");
 
     return { success: true, block };
   } catch (error) {
@@ -334,8 +330,7 @@ export async function deleteCourtBlock(blockId: string, orgId: string) {
       previousData: { courtId: block.court_id },
     });
 
-    revalidatePath("/admin/courts");
-    revalidatePath("/book");
+    revalidatePath("/", "layout");
 
     return { success: true };
   } catch (error) {
@@ -376,7 +371,7 @@ export async function adminCancelBooking(bookingId: string, reason?: string, org
       },
     });
 
-    revalidatePath("/admin/bookings");
+    revalidatePath("/", "layout");
 
     return { success: true, booking };
   } catch (error) {
@@ -417,7 +412,7 @@ export async function updateUserRole(
       newData: { newRole: role },
     });
 
-    revalidatePath("/admin/users");
+    revalidatePath("/", "layout");
 
     return { success: true, user };
   } catch (error) {

@@ -134,7 +134,7 @@ export async function inviteMember(orgId: string, formData: FormData) {
       };
     }
 
-    revalidatePath(`/admin/members`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to invite member:", error);
@@ -207,7 +207,7 @@ export async function updateMemberRole(
       newData: { role: newRole },
     });
 
-    revalidatePath(`/admin/members`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update member role:", error);
@@ -266,7 +266,7 @@ export async function updateMemberTier(
       newData: { tierId },
     });
 
-    revalidatePath(`/admin/members`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update member tier:", error);
@@ -316,7 +316,7 @@ export async function suspendMember(orgId: string, memberId: string) {
       newData: { status: "suspended" },
     });
 
-    revalidatePath(`/admin/members`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to suspend member:", error);
@@ -356,7 +356,7 @@ export async function activateMember(orgId: string, memberId: string) {
       newData: { status: "active" },
     });
 
-    revalidatePath(`/admin/members`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to activate member:", error);
@@ -405,7 +405,7 @@ export async function removeMember(orgId: string, memberId: string) {
       previousData: { role: member.role, userId: member.user_id },
     });
 
-    revalidatePath(`/admin/members`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to remove member:", error);
