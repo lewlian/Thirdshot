@@ -50,3 +50,15 @@ next-env.d.ts
 .claude/
 .vscode/
 .idea/
+.mcp.json
+
+# Internal documentation (implementation plans, audits, checklists)
+PRODUCTION-CHECKLIST.md
+PASSWORD-RESET-IMPLEMENTATION.md
+EMAIL-VERIFICATION-IMPLEMENTATION.md
+EMAIL-VERIFICATION-STATUS.md
+RATE-LIMITING-IMPLEMENTATION.md
+REMINDER-SYSTEM-SETUP.md
+TESTING.md
+DOCS-GUIDE.md
+FEATURES.md
