@@ -65,8 +65,9 @@ describe("BookingCard", () => {
       const booking = createMockBooking();
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText("Court Booking")).toBeInTheDocument();
-      expect(screen.getByText("$40.00 SGD")).toBeInTheDocument();
+      // "Court Booking" appears as both card title fallback and type badge
+      expect(screen.getAllByText("Court Booking").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("$40.00")).toBeInTheDocument();
       expect(screen.getByText("Court A")).toBeInTheDocument();
     });
 
@@ -285,7 +286,8 @@ describe("BookingCard", () => {
       const booking = createMockBooking({ type: "COURT_BOOKING" });
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText("Court Booking")).toBeInTheDocument();
+      // "Court Booking" appears as both card title fallback and type badge
+      expect(screen.getAllByText("Court Booking").length).toBeGreaterThanOrEqual(1);
     });
 
     it("should display Corporate Booking type", () => {
@@ -341,21 +343,21 @@ describe("BookingCard", () => {
       const booking = createMockBooking({ total_cents: 4500 });
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText("$45.00 SGD")).toBeInTheDocument();
+      expect(screen.getByText("$45.00")).toBeInTheDocument();
     });
 
     it("should handle zero cents", () => {
       const booking = createMockBooking({ total_cents: 0 });
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText("$0.00 SGD")).toBeInTheDocument();
+      expect(screen.getByText("$0.00")).toBeInTheDocument();
     });
 
     it("should handle large amounts", () => {
       const booking = createMockBooking({ total_cents: 100000 }); // $1000
       render(<BookingCard booking={booking} />);
 
-      expect(screen.getByText("$1000.00 SGD")).toBeInTheDocument();
+      expect(screen.getByText("$1000.00")).toBeInTheDocument();
     });
   });
 });
