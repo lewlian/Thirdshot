@@ -53,7 +53,7 @@ export async function inviteMember(orgId: string, formData: FormData) {
   const parsed = inviteSchema.safeParse({
     email: formData.get("email"),
     role: formData.get("role"),
-    tierId: formData.get("tierId") || undefined,
+    tierId: formData.get("tierId") && formData.get("tierId") !== "none" ? formData.get("tierId") : undefined,
   });
 
   if (!parsed.success) {

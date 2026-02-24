@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Calendar, Clock, MapPin, XCircle, AlertCircle } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 import { ConfirmationClient } from "@/app/(main)/bookings/[bookingId]/confirmation/confirmation-client";
 import { AddToCalendar } from "@/components/booking/add-to-calendar";
 import { generateGoogleCalendarUrl } from "@/lib/calendar/ical";
@@ -72,8 +73,15 @@ export default async function ConfirmationPage({
     notFound();
   }
 
-  // Check ownership
-  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
+  // Check ownership — use org role, not global role
+  const { data: orgMembership } = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", org.id)
+    .eq("user_id", dbUser.id)
+    .single();
+  const isOrgAdmin = orgMembership?.role === "owner" || orgMembership?.role === "admin";
+  if (booking.user_id !== dbUser.id && !isOrgAdmin) {
     notFound();
   }
 
@@ -184,7 +192,6 @@ export default async function ConfirmationPage({
   const startTimeSGT = firstSlot
     ? toZonedTime(firstSlot.start_time, TIMEZONE)
     : new Date();
-  const totalDollars = (booking.total_cents / 100).toFixed(2);
   const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
 
   // Build calendar data for confirmed bookings
@@ -302,7 +309,7 @@ export default async function ConfirmationPage({
                       : "bg-red-100 text-red-700"
                   }`}
                 >
-                  {booking.status.replace("_", " ")}
+                  {booking.status.replaceAll("_", " ")}
                 </Badge>
               </div>
             </div>
@@ -341,9 +348,11 @@ export default async function ConfirmationPage({
             </div>
 
             <div className="border-t border-border/50 pt-4 flex justify-between items-center">
-              <span className="text-muted-foreground font-medium">Total Paid:</span>
+              <span className="text-muted-foreground font-medium">
+                {isConfirmed ? "Total Paid:" : "Total:"}
+              </span>
               <span className="text-2xl font-bold text-primary">
-                ${totalDollars} {booking.currency}
+                {formatCurrency(booking.total_cents, booking.currency)}
               </span>
             </div>
 

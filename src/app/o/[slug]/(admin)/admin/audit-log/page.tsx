@@ -56,11 +56,28 @@ async function getActionTypes(organizationId: string) {
   const { data } = await supabase
     .from("admin_audit_logs")
     .select("action")
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .limit(500);
 
   if (!data) return [];
   // Deduplicate actions
   return [...new Set(data.map((d) => d.action))];
+}
+
+function getActionVerb(action: string): string {
+  const verbs: Record<string, string> = {
+    CREATE: "created",
+    UPDATE: "updated",
+    UPDATE_ROLE: "updated role of",
+    DELETE: "deleted",
+    CANCEL: "cancelled",
+    CONFIRM: "confirmed",
+    SUSPEND: "suspended",
+    ACTIVATE: "activated",
+    REMOVE: "removed",
+    INVITE: "invited",
+  };
+  return verbs[action] || `performed ${action.toLowerCase().replaceAll("_", " ")} on`;
 }
 
 function getActionColor(action: string) {
@@ -176,7 +193,7 @@ async function AuditLogContent({
                         <span className="font-medium">
                           {admin?.name || admin?.email}
                         </span>{" "}
-                        {log.action.toLowerCase()}d{" "}
+                        {getActionVerb(log.action)}{" "}
                         <span className="font-medium">{log.entity_type}</span>
                         {typeof newData?.name === "string" && (
                           <span className="text-gray-600">

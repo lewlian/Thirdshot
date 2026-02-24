@@ -2,6 +2,7 @@ import { getOrgBySlug } from "@/lib/org-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, Clock, MapPin, Phone, Mail, Globe } from "lucide-react";
+import { getCurrencySymbol } from "@/lib/utils";
 import Link from "next/link";
 
 interface ClubPageProps {
@@ -192,10 +193,11 @@ export default async function ClubPage({ params }: ClubPageProps) {
           <h2 className="text-2xl font-bold text-gray-900">Membership</h2>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {tiers.map((tier) => {
+              const currencySymbol = getCurrencySymbol(org.currency);
               const priceDisplay =
                 tier.price_cents === 0
                   ? "Free"
-                  : `$${(tier.price_cents / 100).toFixed(0)}/${
+                  : `${currencySymbol}${(tier.price_cents / 100).toFixed(0)}/${
                       tier.billing_period === "monthly"
                         ? "mo"
                         : tier.billing_period === "quarterly"

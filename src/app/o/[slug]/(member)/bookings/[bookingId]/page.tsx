@@ -65,8 +65,15 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     notFound();
   }
 
-  // Check ownership
-  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
+  // Check ownership — use org role, not global role
+  const { data: orgMembership } = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", org.id)
+    .eq("user_id", dbUser.id)
+    .single();
+  const isOrgAdmin = orgMembership?.role === "owner" || orgMembership?.role === "admin";
+  if (booking.user_id !== dbUser.id && !isOrgAdmin) {
     notFound();
   }
 
@@ -101,7 +108,8 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
   );
   const firstSlot = sortedSlots[0];
   const startTimeSGT = firstSlot ? toZonedTime(firstSlot.start_time, TIMEZONE) : new Date();
-  const totalDollars = (booking.total_cents / 100).toFixed(2);
+  const { formatCurrency } = await import("@/lib/utils");
+  const totalFormatted = formatCurrency(booking.total_cents, booking.currency);
   const bookingTypeLabel = typeConfig[booking.type as BookingType] || booking.type;
 
   const isUpcoming = firstSlot && new Date(firstSlot.start_time) > new Date();
@@ -201,7 +209,7 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
             </h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <span className="text-muted-foreground">Amount:</span>
-              <span className="font-medium">${totalDollars} {booking.currency}</span>
+              <span className="font-medium">{totalFormatted}</span>
 
               <span className="text-muted-foreground">Payment Status:</span>
               <span>{payment?.status || "N/A"}</span>

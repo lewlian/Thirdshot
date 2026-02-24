@@ -125,19 +125,9 @@ export default async function HomePage() {
           <p className="text-muted-foreground mb-8 text-lg">
             Set up your club in minutes. No credit card required.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="rounded-full text-lg px-8 h-12" asChild>
-              <Link href="/signup">Get Started Free</Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="rounded-full text-lg px-8 h-12"
-              asChild
-            >
-              <Link href="/login">Sign In</Link>
-            </Button>
-          </div>
+          <Button size="lg" className="rounded-full text-lg px-8 h-12" asChild>
+            <Link href="/signup">Get Started Free</Link>
+          </Button>
         </div>
       </section>
     </div>

@@ -49,6 +49,14 @@ async function getMembers(
     membersQuery = membersQuery.eq("membership_status", statusFilter);
   }
 
+  // Server-side search across joined users table
+  if (search) {
+    membersQuery = membersQuery.or(
+      `name.ilike.%${search}%,email.ilike.%${search}%`,
+      { referencedTable: "users" }
+    );
+  }
+
   const countQuery = supabase
     .from("organization_members")
     .select("*", { count: "exact", head: true })
@@ -57,23 +65,8 @@ async function getMembers(
   const [{ data: members, count: filteredCount }, { count: total }] =
     await Promise.all([membersQuery, countQuery]);
 
-  // Client-side search filter
-  let filteredMembers = members || [];
-  if (search && filteredMembers.length > 0) {
-    const searchLower = search.toLowerCase();
-    filteredMembers = filteredMembers.filter((m) => {
-      const user = m.users as unknown as {
-        name: string | null;
-        email: string;
-      } | null;
-      return (
-        user?.email?.toLowerCase().includes(searchLower) ||
-        user?.name?.toLowerCase().includes(searchLower)
-      );
-    });
-  }
-
-  const effectiveCount = search ? filteredMembers.length : filteredCount || 0;
+  const filteredMembers = members || [];
+  const effectiveCount = filteredCount || 0;
 
   return {
     members: filteredMembers,

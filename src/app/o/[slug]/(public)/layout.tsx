@@ -15,14 +15,16 @@ export default async function PublicLayout({
 
   // Check if logged-in user is already a member
   let isMember = false;
+  let isSuperAdmin = false;
   if (user) {
     const supabase = await createServerSupabaseClient();
     const { data: dbUser } = await supabase
       .from("users")
-      .select("id")
+      .select("id, role")
       .eq("supabase_id", user.id)
       .single();
     if (dbUser) {
+      isSuperAdmin = dbUser.role === "ADMIN";
       const { data: membership } = await supabase
         .from("organization_members")
         .select("id")
@@ -67,6 +69,14 @@ export default async function PublicLayout({
                   >
                     Dashboard
                   </Link>
+                  {isSuperAdmin && (
+                    <Link
+                      href="/create-org"
+                      className="text-sm text-gray-600 hover:text-gray-900"
+                    >
+                      Create Org
+                    </Link>
+                  )}
                   {isMember ? (
                     <Link
                       href={`/o/${slug}/courts`}

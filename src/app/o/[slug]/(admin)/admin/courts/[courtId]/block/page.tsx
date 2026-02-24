@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrgBySlug } from "@/lib/org-context";
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import { BlockForm } from "@/app/admin/courts/[courtId]/block/block-form";
 import { BlockList } from "@/app/admin/courts/[courtId]/block/block-list";
 
@@ -36,6 +39,12 @@ export default async function BlockCourtPage({ params }: BlockCourtPageProps) {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
+        <Button asChild variant="ghost" size="sm" className="mb-2">
+          <Link href={`/o/${slug}/admin/courts`}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Courts
+          </Link>
+        </Button>
         <h1 className="text-2xl font-bold text-gray-900">Block Court Time</h1>
         <p className="text-gray-600">
           Block time slots for {court.name} (maintenance, events, etc.)

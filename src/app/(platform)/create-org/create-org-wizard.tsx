@@ -201,7 +201,7 @@ export function CreateOrgWizard() {
               <div>
                 <Label htmlFor="slug">URL Slug *</Label>
                 <div className="flex items-center gap-1">
-                  <span className="text-sm text-gray-500">thirdshot.app/o/</span>
+                  <span className="text-sm text-gray-500">{typeof window !== "undefined" ? window.location.host : ""}/o/</span>
                   <Input
                     id="slug"
                     value={form.slug}

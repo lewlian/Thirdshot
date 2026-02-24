@@ -47,8 +47,15 @@ export default async function PaymentPage({ params }: PaymentPageProps) {
     notFound();
   }
 
-  // Check ownership
-  if (booking.user_id !== dbUser.id && dbUser.role !== "ADMIN") {
+  // Check ownership — use org role, not global role
+  const { data: orgMembership } = await supabase
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", org.id)
+    .eq("user_id", dbUser.id)
+    .single();
+  const isOrgAdmin = orgMembership?.role === "owner" || orgMembership?.role === "admin";
+  if (booking.user_id !== dbUser.id && !isOrgAdmin) {
     notFound();
   }
 

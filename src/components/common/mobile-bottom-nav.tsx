@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils";
 export function MobileBottomNav({ orgSlug }: { orgSlug?: string }) {
   const pathname = usePathname();
 
-  const prefix = orgSlug ? `/o/${orgSlug}` : "";
+  // Don't render nav without org context — links would be broken
+  if (!orgSlug) return null;
+
+  const prefix = `/o/${orgSlug}`;
 
   const navItems = [
     {

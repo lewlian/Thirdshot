@@ -124,10 +124,14 @@ export function CourtSheet({ data }: { data: CalendarData }) {
 
   const handleEmptyCellClick = useCallback(
     (dayDate: Date, hour: number) => {
-      setBlockPrefill({ date: dateKey(dayDate), hour });
+      setBlockPrefill({
+        date: dateKey(dayDate),
+        hour,
+        courtId: courts.length === 1 ? courts[0].id : undefined,
+      });
       setCreateBlockOpen(true);
     },
-    []
+    [courts]
   );
 
   const handleBookingClick = useCallback((booking: CalendarBooking, e: React.MouseEvent) => {
@@ -262,7 +266,7 @@ export function CourtSheet({ data }: { data: CalendarData }) {
                           onClick={(e) => handleBlockClick(block, e)}
                         >
                           <p className="font-medium truncate text-gray-700">{block.courtName}</p>
-                          <p className="truncate text-gray-500">{block.reason.replace("_", " ")}</p>
+                          <p className="truncate text-gray-500">{block.reason.replaceAll("_", " ")}</p>
                         </div>
                       );
                     })}

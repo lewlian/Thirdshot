@@ -82,7 +82,6 @@ export function RoleSelect({
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="owner">Owner</SelectItem>
         <SelectItem value="admin">Admin</SelectItem>
         <SelectItem value="staff">Staff</SelectItem>
         <SelectItem value="member">Member</SelectItem>
@@ -352,12 +351,12 @@ export function InviteMemberForm({
               <label className="text-sm font-medium" htmlFor="invite-tier">
                 Membership Tier (optional)
               </label>
-              <Select name="tierId" defaultValue="">
+              <Select name="tierId" defaultValue="none">
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="No tier" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No tier</SelectItem>
+                  <SelectItem value="none">No tier</SelectItem>
                   {tiers.map((tier) => (
                     <SelectItem key={tier.id} value={tier.id}>
                       {tier.name}
