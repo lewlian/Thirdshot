@@ -22,13 +22,18 @@ export function Header({ user, isAdmin = false, isSuperAdmin = false, orgSlug }:
   const prefix = orgSlug ? `/o/${orgSlug}` : "";
   const homeHref = orgSlug ? `/o/${orgSlug}/courts` : "/";
 
-  const navLinks = [
-    { href: homeHref, label: orgSlug ? "Courts" : "Home" },
-    ...(!orgSlug ? [{ href: "/courts", label: "Courts" }] : []),
-    ...(user ? [{ href: `${prefix}/bookings`, label: "My Bookings" }] : []),
-    ...(isAdmin ? [{ href: `${prefix}/admin`, label: "Admin", icon: Shield }] : []),
-    ...(isSuperAdmin ? [{ href: "/create-org", label: "Create Org", icon: Plus }] : []),
-  ];
+  const navLinks = orgSlug
+    ? [
+        { href: homeHref, label: "Courts" },
+        ...(user ? [{ href: `${prefix}/bookings`, label: "My Bookings" }] : []),
+        ...(isAdmin ? [{ href: `${prefix}/admin`, label: "Admin", icon: Shield }] : []),
+        ...(isSuperAdmin ? [{ href: "/create-org", label: "Create Org", icon: Plus }] : []),
+      ]
+    : [
+        { href: user ? "/dashboard" : "/", label: "Home" },
+        ...(user ? [{ href: "/dashboard", label: "Dashboard" }] : []),
+        ...(isSuperAdmin ? [{ href: "/create-org", label: "Create Org", icon: Plus }] : []),
+      ];
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";

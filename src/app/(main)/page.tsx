@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { getUser } from "@/lib/supabase/server";
 import {
   Calendar,
   Users,
@@ -48,7 +50,13 @@ const features = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Redirect logged-in users to the dashboard
+  const user = await getUser();
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
