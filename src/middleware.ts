@@ -12,6 +12,11 @@ export async function middleware(request: NextRequest) {
 
   // Redirect authenticated users away from auth routes
   if (isAuthRoute && user) {
+    // If there's a redirect param, honor it
+    const redirectParam = request.nextUrl.searchParams.get("redirect");
+    if (redirectParam && redirectParam.startsWith("/")) {
+      return NextResponse.redirect(new URL(redirectParam, request.url));
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
@@ -22,7 +27,14 @@ export async function middleware(request: NextRequest) {
 
   // Org-scoped member/admin routes require auth
   // Public routes like /o/{slug}/book don't require auth
-  const orgMemberMatch = pathname.match(/^\/o\/[^/]+\/(bookings|profile|courts)/);
+  // Allow guest access to payment pages (for guest bookings)
+  const isGuestPayRoute = pathname.match(/^\/o\/[^/]+\/bookings\/[^/]+\/pay$/);
+  if (isGuestPayRoute && !user) {
+    // Allow unauthenticated access to pay route for guest bookings
+    return response;
+  }
+
+  const orgMemberMatch = pathname.match(/^\/o\/[^/]+\/(bookings|profile|courts|sign-waiver)/);
   const orgAdminMatch = pathname.match(/^\/o\/[^/]+\/admin/);
 
   if ((orgMemberMatch || orgAdminMatch) && !user) {

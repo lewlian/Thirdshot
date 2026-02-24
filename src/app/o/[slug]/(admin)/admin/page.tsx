@@ -12,12 +12,11 @@ async function getDashboardStats(organizationId: string, timezone: string) {
   const supabase = await createServerSupabaseClient();
 
   const now = new Date();
-  const startOfToday = new Date(
-    formatInTimeZone(now, timezone, "yyyy-MM-dd") + "T00:00:00+08:00"
-  );
-  const endOfToday = new Date(
-    formatInTimeZone(now, timezone, "yyyy-MM-dd") + "T23:59:59+08:00"
-  );
+  const todayStr = formatInTimeZone(now, timezone, "yyyy-MM-dd");
+  // Use timezone-aware date parsing
+  const { fromZonedTime } = await import("date-fns-tz");
+  const startOfToday = fromZonedTime(new Date(`${todayStr}T00:00:00`), timezone);
+  const endOfToday = fromZonedTime(new Date(`${todayStr}T23:59:59`), timezone);
 
   const [
     { count: totalMembers },
@@ -67,9 +66,19 @@ async function getDashboardStats(organizationId: string, timezone: string) {
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false })
       .limit(5),
-    // Total revenue for this org
-    supabase.rpc("get_total_revenue", { p_organization_id: organizationId }),
+    // Total revenue for this org (direct query instead of RPC)
+    supabase
+      .from("payments")
+      .select("amount_cents")
+      .eq("organization_id", organizationId)
+      .eq("status", "COMPLETED"),
   ]);
+
+  // Calculate total revenue from completed payments
+  const revenuePayments = revenueData || [];
+  const totalRevenue = Array.isArray(revenuePayments)
+    ? revenuePayments.reduce((sum, p) => sum + (p.amount_cents || 0), 0)
+    : 0;
 
   return {
     totalMembers: totalMembers || 0,
@@ -78,7 +87,7 @@ async function getDashboardStats(organizationId: string, timezone: string) {
     todayBookings: todayBookings || 0,
     pendingBookings: pendingBookings || 0,
     recentBookings: recentBookings || [],
-    totalRevenue: (revenueData as number) || 0,
+    totalRevenue,
   };
 }
 
@@ -174,7 +183,7 @@ export default async function AdminDashboardPage({
             <p className="text-3xl font-bold">{stats.pendingBookings}</p>
             {stats.pendingBookings > 0 && (
               <Link
-                href={`/o/${slug}/admin/bookings?status=pending`}
+                href={`/o/${slug}/admin/bookings?status=pending_payment`}
                 className="text-sm text-orange-600 hover:underline"
               >
                 View pending &rarr;

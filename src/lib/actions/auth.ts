@@ -88,7 +88,12 @@ export async function login(formData: FormData): Promise<AuthActionResult> {
       .eq('supabase_id', user.id);
   }
 
-  redirect("/");
+  // Check for redirect param
+  const redirectTo = formData.get("redirect") as string;
+  if (redirectTo && redirectTo.startsWith("/")) {
+    redirect(redirectTo);
+  }
+  redirect("/dashboard");
 }
 
 export async function signup(formData: FormData): Promise<AuthActionResult> {

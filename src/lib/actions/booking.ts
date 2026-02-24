@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { checkSlotAvailability, getUserDailySlotsCount } from "@/lib/booking/availability";
 import { calculateBookingPrice } from "@/lib/booking/pricing";
 import { sendBookingCancelledEmail } from "@/lib/email/send";
@@ -341,7 +342,8 @@ export async function cancelBooking(
 
   const wasConfirmed = booking.status === "CONFIRMED";
 
-  await supabase
+  const adminClient = createAdminSupabaseClient();
+  await adminClient
     .from('bookings')
     .update({
       status: "CANCELLED",

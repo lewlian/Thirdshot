@@ -36,6 +36,7 @@ interface BookingCardProps {
     booking_slots: BookingSlot[];
   };
   linkPrefix?: string;
+  orgName?: string;
 }
 
 const statusConfig: Record<BookingStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -53,7 +54,7 @@ const typeConfig: Record<BookingType, string> = {
   PRIVATE_COACHING: "Private Coaching",
 };
 
-export function BookingCard({ booking, linkPrefix = "" }: BookingCardProps) {
+export function BookingCard({ booking, linkPrefix = "", orgName }: BookingCardProps) {
   const router = useRouter();
   const totalDollars = (booking.total_cents / 100).toFixed(2);
   const status = statusConfig[booking.status] || { label: booking.status, variant: "outline" as const };
@@ -107,7 +108,7 @@ export function BookingCard({ booking, linkPrefix = "" }: BookingCardProps) {
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
-            <CardTitle className="text-lg">Thirdshot Pickleball</CardTitle>
+            <CardTitle className="text-lg">{orgName || "Court Booking"}</CardTitle>
             <Badge variant="outline" className="w-fit">
               {bookingTypeLabel}
             </Badge>

@@ -11,16 +11,19 @@ import {
 
 interface BookingStatusFilterProps {
   currentStatus?: string;
+  slug?: string;
 }
 
-export function BookingStatusFilter({ currentStatus }: BookingStatusFilterProps) {
+export function BookingStatusFilter({ currentStatus, slug }: BookingStatusFilterProps) {
   const router = useRouter();
+
+  const basePath = slug ? `/o/${slug}/admin/bookings` : "/admin/bookings";
 
   const handleChange = (value: string) => {
     if (value === "all") {
-      router.push("/admin/bookings");
+      router.push(basePath);
     } else {
-      router.push(`/admin/bookings?status=${value}`);
+      router.push(`${basePath}?status=${value}`);
     }
   };
 

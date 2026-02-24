@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { login, signInWithGoogle, type AuthActionResult } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-12">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect") || "";
+  const resetSuccess = searchParams.get("reset") === "success";
+  const authError = searchParams.get("error");
+
   const [state, formAction, isPending] = useActionState<AuthActionResult, FormData>(
     async (_prevState, formData) => login(formData),
     {}
@@ -26,11 +41,29 @@ export default function LoginPage() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {resetSuccess && (
+          <div className="bg-green-50 text-green-700 p-3 rounded-md text-sm">
+            Password reset successfully. Please sign in with your new password.
+          </div>
+        )}
+
+        {authError && (
+          <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+            {authError === "auth_callback_error"
+              ? "Authentication failed. Please try again."
+              : authError}
+          </div>
+        )}
+
         <form action={formAction} className="space-y-4">
           {state.error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
               {state.error}
             </div>
+          )}
+
+          {redirectParam && (
+            <input type="hidden" name="redirect" value={redirectParam} />
           )}
 
           <div className="space-y-2">
@@ -80,6 +113,9 @@ export default function LoginPage() {
         </div>
 
         <form action={signInWithGoogle}>
+          {redirectParam && (
+            <input type="hidden" name="redirect" value={redirectParam} />
+          )}
           <Button type="submit" variant="outline" className="w-full">
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
@@ -105,7 +141,10 @@ export default function LoginPage() {
 
         <p className="text-center text-sm text-gray-600">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-medium text-primary hover:underline">
+          <Link
+            href={redirectParam ? `/signup?redirect=${encodeURIComponent(redirectParam)}` : "/signup"}
+            className="font-medium text-primary hover:underline"
+          >
             Sign up
           </Link>
         </p>

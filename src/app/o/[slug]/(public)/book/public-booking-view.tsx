@@ -265,7 +265,7 @@ export function PublicBookingView({
 
             <p className="text-xs text-center text-muted-foreground">
               Already a member?{" "}
-              <a href="/login" className="underline">
+              <a href={`/login?redirect=/o/${orgSlug}/book`} className="underline">
                 Sign in
               </a>{" "}
               for member pricing

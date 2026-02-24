@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { deleteCourtBlock } from "@/lib/actions/admin";
 import { formatInTimeZone } from "date-fns-tz";
 
-const TIMEZONE = "Asia/Singapore";
-
 interface Block {
   id: string;
   start_time: string;
@@ -19,9 +17,11 @@ interface Block {
 interface BlockListProps {
   blocks: Block[];
   orgId: string;
+  timezone?: string;
 }
 
-export function BlockList({ blocks, orgId }: BlockListProps) {
+export function BlockList({ blocks, orgId, timezone = "Asia/Singapore" }: BlockListProps) {
+  const TIMEZONE = timezone;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 

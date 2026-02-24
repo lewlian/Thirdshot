@@ -97,7 +97,7 @@ async function BookingsContent({
               Recurring
             </Link>
           </Button>
-          <BookingStatusFilter currentStatus={status} />
+          <BookingStatusFilter currentStatus={status} slug={slug} />
         </div>
       </div>
 
@@ -204,6 +204,7 @@ async function BookingsContent({
                           <AdminBookingActions
                             bookingId={booking.id}
                             status={booking.status}
+                            orgId={organizationId}
                           />
                         </td>
                       </tr>

@@ -30,7 +30,7 @@ export function Header({ user, isAdmin = false, isSuperAdmin = false, orgSlug }:
         ...(isSuperAdmin ? [{ href: "/create-org", label: "Create Org", icon: Plus }] : []),
       ]
     : [
-        { href: user ? "/dashboard" : "/", label: "Home" },
+        { href: "/", label: "Home" },
         ...(user ? [{ href: "/dashboard", label: "Dashboard" }] : []),
         ...(isSuperAdmin ? [{ href: "/create-org", label: "Create Org", icon: Plus }] : []),
       ];
@@ -78,9 +78,9 @@ export function Header({ user, isAdmin = false, isSuperAdmin = false, orgSlug }:
           <div className="hidden sm:ml-6 sm:flex sm:items-center gap-3">
             {user ? (
               <>
-                <Link href={`${prefix}/profile`}>
+                <Link href={orgSlug ? `${prefix}/profile` : "/dashboard"}>
                   <Button variant="ghost" size="sm" className="rounded-full font-medium">
-                    Profile
+                    {orgSlug ? "Profile" : "Dashboard"}
                   </Button>
                 </Link>
                 <form action={logout}>
@@ -157,11 +157,11 @@ export function Header({ user, isAdmin = false, isSuperAdmin = false, orgSlug }:
               {user ? (
                 <>
                   <Link
-                    href={`${prefix}/profile`}
+                    href={orgSlug ? `${prefix}/profile` : "/dashboard"}
                     className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    Profile
+                    {orgSlug ? "Profile" : "Dashboard"}
                   </Link>
                   <form action={logout}>
                     <button

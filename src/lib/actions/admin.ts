@@ -53,14 +53,14 @@ async function createAuditLog(
 
 // Court CRUD operations
 export async function createCourt(formData: FormData) {
-  const admin = await getAdminUser();
-  if (!admin) {
-    return { success: false, error: "Unauthorized" };
-  }
-
   const orgId = formData.get("orgId") as string;
   if (!orgId) {
     return { success: false, error: "Organization ID is required" };
+  }
+
+  const admin = await getAdminUser(orgId);
+  if (!admin) {
+    return { success: false, error: "Unauthorized" };
   }
 
   const data = {
@@ -117,14 +117,14 @@ export async function createCourt(formData: FormData) {
 }
 
 export async function updateCourt(courtId: string, formData: FormData) {
-  const admin = await getAdminUser();
-  if (!admin) {
-    return { success: false, error: "Unauthorized" };
-  }
-
   const orgId = formData.get("orgId") as string;
   if (!orgId) {
     return { success: false, error: "Organization ID is required" };
+  }
+
+  const admin = await getAdminUser(orgId);
+  if (!admin) {
+    return { success: false, error: "Unauthorized" };
   }
 
   const data = {
@@ -183,7 +183,7 @@ export async function updateCourt(courtId: string, formData: FormData) {
 }
 
 export async function deleteCourt(courtId: string, orgId: string) {
-  const admin = await getAdminUser();
+  const admin = await getAdminUser(orgId);
   if (!admin) {
     return { success: false, error: "Unauthorized" };
   }
@@ -231,14 +231,14 @@ export async function deleteCourt(courtId: string, orgId: string) {
 
 // Court blocking
 export async function createCourtBlock(formData: FormData) {
-  const admin = await getAdminUser();
-  if (!admin) {
-    return { success: false, error: "Unauthorized" };
-  }
-
   const orgId = formData.get("orgId") as string;
   if (!orgId) {
     return { success: false, error: "Organization ID is required" };
+  }
+
+  const admin = await getAdminUser(orgId);
+  if (!admin) {
+    return { success: false, error: "Unauthorized" };
   }
 
   const data = {
@@ -313,7 +313,7 @@ export async function createCourtBlock(formData: FormData) {
 }
 
 export async function deleteCourtBlock(blockId: string, orgId: string) {
-  const admin = await getAdminUser();
+  const admin = await getAdminUser(orgId);
   if (!admin) {
     return { success: false, error: "Unauthorized" };
   }
@@ -346,7 +346,7 @@ export async function deleteCourtBlock(blockId: string, orgId: string) {
 
 // Admin booking management
 export async function adminCancelBooking(bookingId: string, reason?: string, orgId?: string) {
-  const admin = await getAdminUser();
+  const admin = await getAdminUser(orgId);
   if (!admin) {
     return { success: false, error: "Unauthorized" };
   }
@@ -391,7 +391,7 @@ export async function updateUserRole(
   role: "USER" | "ADMIN",
   orgId: string
 ) {
-  const admin = await getAdminUser();
+  const admin = await getAdminUser(orgId);
   if (!admin) {
     return { success: false, error: "Unauthorized" };
   }

@@ -39,26 +39,29 @@ export default async function FinancePage({
       startDate.setDate(now.getDate() - 30);
   }
 
-  // Fetch data in parallel
-  const [revenueResult, memberResult, invoicesResult, recentPayments] =
+  // Fetch data using direct queries instead of non-existent RPCs
+  const [paymentsResult, membersResult, totalMembersResult, recentPayments] =
     await Promise.all([
-      supabase.rpc("get_org_revenue_summary", {
-        p_org_id: org.id,
-        p_start_date: startDate.toISOString(),
-        p_end_date: now.toISOString(),
-      }),
-      supabase.rpc("get_member_growth", {
-        p_org_id: org.id,
-        p_start_date: startDate.toISOString(),
-        p_end_date: now.toISOString(),
-      }),
+      // Revenue from completed payments in period
       supabase
-        .from("invoices")
-        .select("*")
+        .from("payments")
+        .select("amount_cents")
         .eq("organization_id", org.id)
-        .in("status", ["sent", "overdue"])
-        .order("due_date", { ascending: true })
-        .limit(10),
+        .eq("status", "COMPLETED")
+        .gte("paid_at", startDate.toISOString())
+        .lte("paid_at", now.toISOString()),
+      // New members in period
+      supabase
+        .from("organization_members")
+        .select("*", { count: "exact", head: true })
+        .eq("organization_id", org.id)
+        .gte("joined_at", startDate.toISOString()),
+      // Total & active members
+      supabase
+        .from("organization_members")
+        .select("membership_status", { count: "exact" })
+        .eq("organization_id", org.id),
+      // Recent completed payments
       supabase
         .from("payments")
         .select("*, bookings(type), users(name, email)")
@@ -68,21 +71,33 @@ export default async function FinancePage({
         .limit(10),
     ]);
 
-  const revenue = (revenueResult.data as Record<string, number>) || {
-    booking_revenue_cents: 0,
-    membership_revenue_cents: 0,
-    total_revenue_cents: 0,
-    booking_count: 0,
-  };
+  const completedPayments = paymentsResult.data || [];
+  const totalRevenueCents = completedPayments.reduce(
+    (sum, p) => sum + (p.amount_cents || 0),
+    0
+  );
+  const bookingCount = completedPayments.length;
 
-  const members = (memberResult.data as Record<string, number>) || {
-    new_members: 0,
-    total_members: 0,
-    active_members: 0,
-  };
+  const allMembers = totalMembersResult.data || [];
+  const totalMembers = allMembers.length;
+  const activeMembers = allMembers.filter(
+    (m) => m.membership_status === "active"
+  ).length;
+  const newMembers = membersResult.count || 0;
 
-  const outstandingInvoices = invoicesResult.data || [];
   const payments = recentPayments.data || [];
+
+  const currency = org.currency || "SGD";
+  const currencySymbol =
+    currency === "SGD" || currency === "USD" || currency === "AUD"
+      ? "$"
+      : currency === "MYR"
+        ? "RM"
+        : currency === "GBP"
+          ? "\u00a3"
+          : currency === "THB"
+            ? "\u0e3f"
+            : currency;
 
   const periodLabel =
     period === "7d"
@@ -113,7 +128,7 @@ export default async function FinancePage({
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">
-              ${((revenue.total_revenue_cents || 0) / 100).toFixed(2)}
+              {currencySymbol}{(totalRevenueCents / 100).toFixed(2)}
             </p>
           </CardContent>
         </Card>
@@ -121,29 +136,12 @@ export default async function FinancePage({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-500">
-              Booking Revenue
+              Bookings
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">
-              ${((revenue.booking_revenue_cents || 0) / 100).toFixed(2)}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {revenue.booking_count || 0} bookings
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Membership Revenue
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">
-              ${((revenue.membership_revenue_cents || 0) / 100).toFixed(2)}
-            </p>
+            <p className="text-3xl font-bold">{bookingCount}</p>
+            <p className="text-sm text-gray-500 mt-1">completed payments</p>
           </CardContent>
         </Card>
 
@@ -155,40 +153,11 @@ export default async function FinancePage({
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">
-              $
-              {revenue.booking_count && revenue.booking_count > 0
-                ? (
-                    (revenue.booking_revenue_cents || 0) /
-                    revenue.booking_count /
-                    100
-                  ).toFixed(2)
+              {currencySymbol}
+              {bookingCount > 0
+                ? (totalRevenueCents / bookingCount / 100).toFixed(2)
                 : "0.00"}
             </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Member Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Total Members
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{members.total_members || 0}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">
-              Active Members
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{members.active_members || 0}</p>
           </CardContent>
         </Card>
 
@@ -199,60 +168,36 @@ export default async function FinancePage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{members.new_members || 0}</p>
+            <p className="text-3xl font-bold">{newMembers}</p>
             <p className="text-sm text-gray-500 mt-1">in {periodLabel.toLowerCase()}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Outstanding Invoices */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Outstanding Invoices</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {outstandingInvoices.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">
-              No outstanding invoices
-            </p>
-          ) : (
-            <div className="divide-y">
-              {outstandingInvoices.map((invoice) => (
-                <div
-                  key={invoice.id}
-                  className="py-3 flex justify-between items-center"
-                >
-                  <div>
-                    <p className="font-medium font-mono text-sm">
-                      {invoice.invoice_number}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Due{" "}
-                      {invoice.due_date
-                        ? new Date(invoice.due_date).toLocaleDateString()
-                        : "N/A"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">
-                      ${(invoice.total_cents / 100).toFixed(2)}
-                    </p>
-                    <span
-                      className={`inline-block px-2 py-0.5 text-xs rounded-full ${
-                        invoice.status === "overdue"
-                          ? "bg-red-100 text-red-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {invoice.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Member Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Total Members
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{totalMembers}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Active Members
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{activeMembers}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Recent Payments */}
       <Card>
@@ -278,7 +223,7 @@ export default async function FinancePage({
                         "Guest"}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {(payment.bookings as { type?: string })?.type?.replace(
+                      {(payment.bookings as { type?: string })?.type?.replaceAll(
                         "_",
                         " "
                       ) || "Payment"}{" "}
@@ -289,7 +234,7 @@ export default async function FinancePage({
                     </p>
                   </div>
                   <p className="font-medium">
-                    ${(payment.amount_cents / 100).toFixed(2)}
+                    {currencySymbol}{(payment.amount_cents / 100).toFixed(2)}
                   </p>
                 </div>
               ))}

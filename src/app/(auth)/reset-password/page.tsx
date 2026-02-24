@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Lock, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
+import { createBrowserClient } from "@supabase/ssr";
 
 export default function ResetPasswordPage() {
   return (
@@ -20,26 +21,31 @@ export default function ResetPasswordPage() {
 
 function ResetPasswordContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
   const [status, setStatus] = useState<{
     type: "success" | "error" | null;
     message: string;
   }>({ type: null, message: "" });
 
-  // Check if we have the necessary token/code
-  const hasValidParams = searchParams.get("code") || searchParams.get("token");
-
+  // Check for active session (set by auth callback after recovery code exchange)
   useEffect(() => {
-    if (!hasValidParams) {
-      // Redirect to forgot password if no valid params
-      router.push("/forgot-password");
-    }
-  }, [hasValidParams, router]);
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push("/forgot-password");
+      } else {
+        setHasSession(true);
+      }
+    });
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,8 +105,8 @@ function ResetPasswordContent() {
     }
   };
 
-  if (!hasValidParams) {
-    return null; // Will redirect via useEffect
+  if (!hasSession) {
+    return <div className="flex items-center justify-center py-12">Loading...</div>;
   }
 
   return (

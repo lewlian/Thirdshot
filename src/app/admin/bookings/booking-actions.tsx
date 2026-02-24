@@ -19,18 +19,20 @@ import { adminCancelBooking } from "@/lib/actions/admin";
 interface AdminBookingActionsProps {
   bookingId: string;
   status: string;
+  orgId?: string;
 }
 
 export function AdminBookingActions({
   bookingId,
   status,
+  orgId,
 }: AdminBookingActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleCancel = () => {
     startTransition(async () => {
-      await adminCancelBooking(bookingId, "Cancelled by admin");
+      await adminCancelBooking(bookingId, "Cancelled by admin", orgId);
       router.refresh();
     });
   };

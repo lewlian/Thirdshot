@@ -135,31 +135,11 @@ export default async function HomePage() {
               className="rounded-full text-lg px-8 h-12"
               asChild
             >
-              <Link href="/dashboard">Go to Dashboard</Link>
+              <Link href="/login">Sign In</Link>
             </Button>
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="font-bold text-lg">Thirdshot</p>
-            <div className="flex gap-6 text-sm text-muted-foreground">
-              <Link href="/terms" className="hover:underline">
-                Terms
-              </Link>
-              <Link href="/privacy" className="hover:underline">
-                Privacy
-              </Link>
-              <Link href="/login" className="hover:underline">
-                Sign in
-              </Link>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
