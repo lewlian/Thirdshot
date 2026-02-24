@@ -1,5 +1,5 @@
 import { getOrgBySlug } from "@/lib/org-context";
-import { getUser } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
 export default async function PublicLayout({
@@ -12,6 +12,26 @@ export default async function PublicLayout({
   const { slug } = await params;
   const org = await getOrgBySlug(slug);
   const user = await getUser();
+
+  // Check if logged-in user is already a member
+  let isMember = false;
+  if (user) {
+    const supabase = await createServerSupabaseClient();
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("supabase_id", user.id)
+      .single();
+    if (dbUser) {
+      const { data: membership } = await supabase
+        .from("organization_members")
+        .select("id")
+        .eq("organization_id", org.id)
+        .eq("user_id", dbUser.id)
+        .maybeSingle();
+      isMember = !!membership;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -47,12 +67,21 @@ export default async function PublicLayout({
                   >
                     Dashboard
                   </Link>
-                  <Link
-                    href={`/o/${slug}/join`}
-                    className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800"
-                  >
-                    Join Club
-                  </Link>
+                  {isMember ? (
+                    <Link
+                      href={`/o/${slug}/courts`}
+                      className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800"
+                    >
+                      Go to Courts
+                    </Link>
+                  ) : (
+                    <Link
+                      href={`/o/${slug}/join`}
+                      className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800"
+                    >
+                      Join Club
+                    </Link>
+                  )}
                 </>
               ) : (
                 <>

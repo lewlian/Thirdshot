@@ -254,7 +254,7 @@ export default async function AdminDashboardPage({
                               : "bg-gray-100 text-gray-800"
                         }`}
                       >
-                        {booking.status.replace("_", " ")}
+                        {booking.status.replaceAll("_", " ")}
                       </span>
                     </div>
                   </div>

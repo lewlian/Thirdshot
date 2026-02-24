@@ -53,7 +53,8 @@ export async function getUserOrgs(userId: string) {
   const { data } = await supabase
     .from("organization_members")
     .select("*, organizations(*)")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("membership_status", "active");
   return data || [];
 }
 

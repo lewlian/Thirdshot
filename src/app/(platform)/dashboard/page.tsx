@@ -21,8 +21,8 @@ export default async function DashboardPage() {
 
   const orgMemberships = await getUserOrgs(dbUser.id);
 
-  // If user belongs to exactly one org, redirect directly
-  if (orgMemberships.length === 1) {
+  // If user belongs to exactly one org and is NOT a super admin, redirect directly
+  if (orgMemberships.length === 1 && dbUser.role !== "ADMIN") {
     const org = orgMemberships[0].organizations as any;
     redirect(`/o/${org.slug}/courts`);
   }

@@ -198,7 +198,7 @@ async function BookingsContent({
                                   : "bg-gray-100 text-gray-800"
                             }`}
                           >
-                            {booking.status.replace("_", " ")}
+                            {booking.status.replaceAll("_", " ")}
                           </span>
                         </td>
                         <td className="py-3 px-2">
