@@ -35,9 +35,10 @@ interface CourtFormProps {
   court?: Court;
   orgId?: string;
   linkPrefix?: string;
+  currency?: string;
 }
 
-export function CourtForm({ court, orgId, linkPrefix }: CourtFormProps) {
+export function CourtForm({ court, orgId, linkPrefix, currency = "SGD" }: CourtFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +108,7 @@ export function CourtForm({ court, orgId, linkPrefix }: CourtFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="pricePerHour">Price per Hour (SGD) *</Label>
+        <Label htmlFor="pricePerHour">Price per Hour ({currency}) *</Label>
         <Input
           id="pricePerHour"
           name="pricePerHour"

@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getOrgBySlug } from "@/lib/org-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinanceDateFilter } from "./finance-client";
+import { getCurrencySymbol, formatCurrency } from "@/lib/utils";
 
 interface FinancePageProps {
   params: Promise<{ slug: string }>;
@@ -88,16 +89,7 @@ export default async function FinancePage({
   const payments = recentPayments.data || [];
 
   const currency = org.currency || "SGD";
-  const currencySymbol =
-    currency === "SGD" || currency === "USD" || currency === "AUD"
-      ? "$"
-      : currency === "MYR"
-        ? "RM"
-        : currency === "GBP"
-          ? "\u00a3"
-          : currency === "THB"
-            ? "\u0e3f"
-            : currency;
+  const currencySymbol = getCurrencySymbol(currency);
 
   const periodLabel =
     period === "7d"

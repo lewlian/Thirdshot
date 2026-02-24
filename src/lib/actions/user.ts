@@ -53,7 +53,7 @@ export async function updateProfile(
     })
     .eq('id', dbUser.id);
 
-  revalidatePath("/profile");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 

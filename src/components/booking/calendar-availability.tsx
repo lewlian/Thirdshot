@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "./countdown-timer";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createMultipleBookings } from "@/lib/actions/booking";
@@ -27,12 +27,14 @@ interface CalendarAvailabilityProps {
   availability: DayAvailability[];
   orgId: string;
   orgSlug: string;
+  currency?: string;
 }
 
 export function CalendarAvailability({
   availability,
   orgId,
   orgSlug,
+  currency = "SGD",
 }: CalendarAvailabilityProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -313,7 +315,7 @@ export function CalendarAvailability({
                               <div className="font-semibold text-sm">{startTime}</div>
                               {isSelected ? (
                                 <div className="text-xs text-white/80 mt-0.5">
-                                  {selectedSlot.courtName} • ${(selectedSlot.priceInCents / 100).toFixed(2)}
+                                  {selectedSlot.courtName} • {formatCurrency(selectedSlot.priceInCents, currency)}
                                 </div>
                               ) : (
                                 <div className="text-xs text-muted-foreground mt-0.5">
@@ -373,7 +375,7 @@ export function CalendarAvailability({
                                 <div>
                                   <div className="font-medium text-sm">{court.courtName}</div>
                                   <div className="text-xs text-muted-foreground mt-0.5">
-                                    ${(court.priceInCents / 100).toFixed(2)}/hour
+                                    {formatCurrency(court.priceInCents, currency)}/hour
                                     {slot.isPeak && " • Peak rate"}
                                   </div>
                                 </div>
@@ -413,7 +415,7 @@ export function CalendarAvailability({
                   {selectedSlots.length} {selectedSlots.length === 1 ? 'hour' : 'hours'} selected
                 </div>
                 <div className="text-lg font-bold text-gray-900">
-                  ${(totalPrice / 100).toFixed(2)}
+                  {formatCurrency(totalPrice, currency)}
                 </div>
               </div>
               <Button

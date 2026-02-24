@@ -149,7 +149,7 @@ export async function removeSavedPaymentMethod(): Promise<ActionResult> {
     .delete()
     .eq('id', savedMethod.id);
 
-  revalidatePath("/profile");
+  revalidatePath("/", "layout");
 
   return { success: true };
 }
@@ -217,7 +217,7 @@ export async function chargeBookingWithSavedCard(
         p_hitpay_reference: chargeResult.payment_id || undefined,
       });
 
-      revalidatePath(`/bookings/${bookingId}`);
+      revalidatePath("/", "layout");
 
       return { success: true };
     } else if (chargeResult.status === "pending") {
@@ -272,7 +272,7 @@ export async function refreshSavedCardDetails(): Promise<ActionResult> {
       })
       .eq('id', savedMethod.id);
 
-    revalidatePath("/profile");
+    revalidatePath("/", "layout");
 
     return { success: true };
   } catch (error) {

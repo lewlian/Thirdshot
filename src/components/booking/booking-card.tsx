@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Clock, MapPin, ChevronRight, Timer } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 const TIMEZONE = "Asia/Singapore";
 
@@ -56,7 +57,7 @@ const typeConfig: Record<BookingType, string> = {
 
 export function BookingCard({ booking, linkPrefix = "", orgName }: BookingCardProps) {
   const router = useRouter();
-  const totalDollars = (booking.total_cents / 100).toFixed(2);
+  const totalFormatted = formatCurrency(booking.total_cents, booking.currency);
   const status = statusConfig[booking.status] || { label: booking.status, variant: "outline" as const };
   const isPending = booking.status === "PENDING_PAYMENT";
   const bookingTypeLabel = typeConfig[booking.type] || booking.type;
@@ -160,7 +161,7 @@ export function BookingCard({ booking, linkPrefix = "", orgName }: BookingCardPr
         {/* Total and actions */}
         <div className="flex items-center justify-between pt-2 border-t">
           <span className="font-semibold text-lg">
-            ${totalDollars} {booking.currency}
+            {totalFormatted}
           </span>
           <div className="flex gap-2">
             {isPending && !hasExpired && (

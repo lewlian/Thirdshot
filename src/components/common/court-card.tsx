@@ -9,14 +9,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sun, Lightbulb, Clock } from "lucide-react";
+import { getCurrencySymbol } from "@/lib/utils";
 import type { Court } from "@/types";
 
 interface CourtCardProps {
   court: Court;
   linkPrefix?: string;
+  currency?: string;
 }
 
-export function CourtCard({ court, linkPrefix = "" }: CourtCardProps) {
+export function CourtCard({ court, linkPrefix = "", currency = "SGD" }: CourtCardProps) {
+  const sym = getCurrencySymbol(currency);
   const pricePerHour = (court.price_per_hour_cents / 100).toFixed(0);
   const peakPrice = court.peak_price_per_hour_cents
     ? (court.peak_price_per_hour_cents / 100).toFixed(0)
@@ -68,13 +71,13 @@ export function CourtCard({ court, linkPrefix = "" }: CourtCardProps) {
           <div>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold text-foreground">
-                ${pricePerHour}
+                {sym}{pricePerHour}
               </span>
               <span className="text-sm text-muted-foreground">/hour</span>
             </div>
             {peakPrice && (
               <span className="text-xs text-muted-foreground">
-                ${peakPrice}/hr peak hours
+                {sym}{peakPrice}/hr peak hours
               </span>
             )}
           </div>

@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatInTimeZone } from "date-fns-tz";
 import { adminCancelBooking } from "@/lib/actions/admin";
+import { formatCurrency } from "@/lib/utils";
 import type { CalendarBooking } from "./types";
 
 interface BookingDetailSheetProps {
@@ -116,7 +117,7 @@ export function BookingDetailSheet({
           <div>
             <p className="text-sm text-muted-foreground">Amount</p>
             <p className="font-medium">
-              ${(booking.totalCents / 100).toFixed(2)} {booking.currency}
+              {formatCurrency(booking.totalCents, booking.currency)}
             </p>
           </div>
 

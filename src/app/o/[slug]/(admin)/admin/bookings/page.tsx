@@ -8,6 +8,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import Link from "next/link";
 import { BookingStatusFilter } from "@/app/admin/bookings/status-filter";
 import { AdminBookingActions } from "@/app/admin/bookings/booking-actions";
+import { formatCurrency } from "@/lib/utils";
 
 interface AdminBookingsPageProps {
   params: Promise<{ slug: string }>;
@@ -185,7 +186,7 @@ async function BookingsContent({
                           )}
                         </td>
                         <td className="py-3 px-2">
-                          ${(booking.total_cents / 100).toFixed(2)}
+                          {formatCurrency(booking.total_cents, booking.currency)}
                         </td>
                         <td className="py-3 px-2">
                           <span

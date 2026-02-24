@@ -22,7 +22,7 @@ export default async function NewCourtPage({ params }: NewCourtPageProps) {
           <CardTitle>Court Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <CourtForm orgId={org.id} linkPrefix={`/o/${slug}`} />
+          <CourtForm orgId={org.id} linkPrefix={`/o/${slug}`} currency={org.currency} />
         </CardContent>
       </Card>
     </div>

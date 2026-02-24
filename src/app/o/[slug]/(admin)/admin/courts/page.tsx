@@ -3,6 +3,7 @@ import { getOrgBySlug } from "@/lib/org-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/utils";
 
 interface AdminCourtsPageProps {
   params: Promise<{ slug: string }>;
@@ -86,7 +87,7 @@ export default async function AdminCourtsPage({
                   <div>
                     <span className="text-gray-500">Price:</span>{" "}
                     <span className="font-medium">
-                      ${(court.price_per_hour_cents / 100).toFixed(2)}/hr
+                      {formatCurrency(court.price_per_hour_cents, org.currency)}/hr
                     </span>
                   </div>
                   <div>

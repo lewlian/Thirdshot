@@ -21,6 +21,7 @@ import type { Court } from "@/types";
 import type { TimeSlot } from "@/types/court";
 import { ArrowLeft, ArrowRight, CalendarDays, Clock, Zap } from "lucide-react";
 import Link from "next/link";
+import { getCurrencySymbol } from "@/lib/utils";
 
 interface CourtBookingFormProps {
   court: Court;
@@ -28,6 +29,7 @@ interface CourtBookingFormProps {
   maxSlots: number;
   orgId?: string;
   orgSlug?: string;
+  currency?: string;
 }
 
 export function CourtBookingForm({
@@ -36,6 +38,7 @@ export function CourtBookingForm({
   maxSlots,
   orgId,
   orgSlug,
+  currency = "SGD",
 }: CourtBookingFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -154,6 +157,7 @@ export function CourtBookingForm({
     });
   };
 
+  const sym = getCurrencySymbol(currency);
   const pricePerHour = (court.price_per_hour_cents / 100).toFixed(0);
   const peakPrice = court.peak_price_per_hour_cents
     ? (court.peak_price_per_hour_cents / 100).toFixed(0)
@@ -178,9 +182,9 @@ export function CourtBookingForm({
               </div>
             )}
             <div className="flex items-center gap-1.5 text-sm bg-primary/10 text-primary px-4 py-2 rounded-full font-semibold">
-              ${pricePerHour}/hr
+              {sym}{pricePerHour}/hr
               {peakPrice && (
-                <span className="text-primary/70 font-normal">(${peakPrice}/hr peak)</span>
+                <span className="text-primary/70 font-normal">({sym}{peakPrice}/hr peak)</span>
               )}
             </div>
           </div>
@@ -281,6 +285,7 @@ export function CourtBookingForm({
             court={court}
             date={selectedDate}
             selectedSlots={selectedSlots}
+            currency={currency}
           />
         </div>
         <div className="flex items-end">

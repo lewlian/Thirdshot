@@ -213,7 +213,7 @@ export async function createRecurringBooking(orgId: string, formData: FormData) 
       newData: { title, courtId, dayOfWeek, startTime, endTime, startsOn, endsOn, createdCount, skippedCount },
     });
 
-    revalidatePath(`/admin/bookings`);
+    revalidatePath("/", "layout");
 
     if (skippedCount > 0) {
       return {
@@ -288,7 +288,7 @@ export async function cancelRecurringBooking(orgId: string, recurringBookingId: 
       newData: { cancelledCount },
     });
 
-    revalidatePath(`/admin/bookings`);
+    revalidatePath("/", "layout");
     return { success: true, message: `Cancelled ${cancelledCount} future bookings.` };
   } catch (error) {
     console.error("Failed to cancel recurring booking:", error);

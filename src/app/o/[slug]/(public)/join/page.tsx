@@ -5,6 +5,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import { getCurrencySymbol } from "@/lib/utils";
 
 interface JoinPageProps {
   params: Promise<{ slug: string }>;
@@ -88,10 +89,11 @@ export default async function JoinPage({ params }: JoinPageProps) {
       {tiers && tiers.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {tiers.map((tier) => {
+            const currencySymbol = getCurrencySymbol(org.currency || "SGD");
             const priceDisplay =
               tier.price_cents === 0
                 ? "Free"
-                : `$${(tier.price_cents / 100).toFixed(0)}/${tier.billing_period === "monthly" ? "mo" : tier.billing_period === "quarterly" ? "qtr" : "yr"}`;
+                : `${currencySymbol}${(tier.price_cents / 100).toFixed(0)}/${tier.billing_period === "monthly" ? "mo" : tier.billing_period === "quarterly" ? "qtr" : "yr"}`;
 
             return (
               <Card

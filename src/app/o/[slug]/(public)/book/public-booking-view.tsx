@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type {
@@ -36,6 +36,7 @@ interface PublicBookingViewProps {
   orgId: string;
   orgSlug: string;
   orgName: string;
+  currency?: string;
 }
 
 export function PublicBookingView({
@@ -43,6 +44,7 @@ export function PublicBookingView({
   orgId,
   orgSlug,
   orgName,
+  currency = "SGD",
 }: PublicBookingViewProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -236,13 +238,13 @@ export function PublicBookingView({
                     {format(slot.startTime, "h:mma")} - {slot.courtName}
                   </span>
                   <span className="font-medium">
-                    ${(slot.priceInCents / 100).toFixed(2)}
+                    {formatCurrency(slot.priceInCents, currency)}
                   </span>
                 </div>
               ))}
               <div className="flex justify-between font-bold pt-2 border-t mt-2">
                 <span>Total</span>
-                <span>${(totalPrice / 100).toFixed(2)}</span>
+                <span>{formatCurrency(totalPrice, currency)}</span>
               </div>
             </div>
 
@@ -415,10 +417,7 @@ export function PublicBookingView({
                               </div>
                               {isSelected ? (
                                 <div className="text-xs text-white/80 mt-0.5">
-                                  {selectedSlot.courtName} - $
-                                  {(
-                                    selectedSlot.priceInCents / 100
-                                  ).toFixed(2)}
+                                  {selectedSlot.courtName} - {formatCurrency(selectedSlot.priceInCents, currency)}
                                 </div>
                               ) : (
                                 <div className="text-xs text-muted-foreground mt-0.5">
@@ -491,11 +490,7 @@ export function PublicBookingView({
                                     {court.courtName}
                                   </div>
                                   <div className="text-xs text-muted-foreground mt-0.5">
-                                    $
-                                    {(court.priceInCents / 100).toFixed(
-                                      2
-                                    )}
-                                    /hour
+                                    {formatCurrency(court.priceInCents, currency)}/hour
                                     {slot.isPeak && " (Peak)"}
                                   </div>
                                 </div>
@@ -533,7 +528,7 @@ export function PublicBookingView({
                   {selectedSlots.length === 1 ? "hour" : "hours"} selected
                 </div>
                 <div className="text-lg font-bold text-gray-900">
-                  ${(totalPrice / 100).toFixed(2)}
+                  {formatCurrency(totalPrice, currency)}
                 </div>
               </div>
               <Button

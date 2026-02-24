@@ -55,6 +55,7 @@ export default async function PublicBookPage({ params }: PublicBookPageProps) {
         orgId={org.id}
         orgSlug={slug}
         orgName={org.name}
+        currency={org.currency}
       />
     </div>
   );

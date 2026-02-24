@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { formatCurrency } from "@/lib/utils";
 import type { Court } from "@/types";
 import type { TimeSlot } from "@/types/court";
 
@@ -9,12 +10,14 @@ interface BookingSummaryProps {
   court: Court;
   date: Date;
   selectedSlots: TimeSlot[];
+  currency?: string;
 }
 
 export function BookingSummary({
   court,
   date,
   selectedSlots,
+  currency = "SGD",
 }: BookingSummaryProps) {
   if (selectedSlots.length === 0) {
     return (
@@ -87,7 +90,7 @@ export function BookingSummary({
                   <span className="ml-1 text-amber-600">(Peak)</span>
                 )}
               </span>
-              <span>${(slot.priceInCents / 100).toFixed(2)}</span>
+              <span>{formatCurrency(slot.priceInCents, currency)}</span>
             </div>
           ))}
         </div>
@@ -96,7 +99,7 @@ export function BookingSummary({
 
         <div className="flex justify-between font-bold">
           <span>Total</span>
-          <span>${(totalCents / 100).toFixed(2)}</span>
+          <span>{formatCurrency(totalCents, currency)}</span>
         </div>
       </CardContent>
     </Card>

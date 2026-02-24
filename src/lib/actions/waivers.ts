@@ -131,7 +131,7 @@ export async function signWaiver(orgId: string, waiverId: string) {
     .eq("user_id", dbUser.id)
     .eq("membership_status", "pending_waiver");
 
-  revalidatePath(`/o`);
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -198,7 +198,7 @@ export async function updateWaiver(orgId: string, formData: FormData) {
       });
     }
 
-    revalidatePath(`/admin/settings`);
+    revalidatePath("/", "layout");
     return { success: true };
   } catch (error) {
     console.error("Failed to update waiver:", error);

@@ -48,7 +48,7 @@ export default async function CourtsPage({ params }: CourtsPageProps) {
         ) : (
           <div className="grid gap-5 md:grid-cols-2 pb-8">
             {courts.map((court) => (
-              <CourtCard key={court.id} court={court} linkPrefix={`/o/${slug}`} />
+              <CourtCard key={court.id} court={court} linkPrefix={`/o/${slug}`} currency={org.currency} />
             ))}
           </div>
         )}

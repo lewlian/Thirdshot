@@ -169,8 +169,7 @@ export async function createBooking(
       return { error: error.message };
     }
 
-    revalidatePath("/courts");
-    revalidatePath("/bookings");
+    revalidatePath("/", "layout");
 
     return { success: true, bookingId };
   } catch (error) {
@@ -286,8 +285,7 @@ export async function createMultipleBookings(
       return { error: error.message };
     }
 
-    revalidatePath("/courts");
-    revalidatePath("/bookings");
+    revalidatePath("/", "layout");
 
     return { success: true, bookingId };
   } catch (error) {
@@ -353,8 +351,9 @@ export async function cancelBooking(
     .eq('id', bookingId);
 
   // Send cancellation email
+  const { formatCurrency } = await import("@/lib/utils");
   const refundAmount = wasConfirmed
-    ? `$${(booking.total_cents / 100).toFixed(2)} ${booking.currency}`
+    ? formatCurrency(booking.total_cents, booking.currency)
     : undefined;
 
   const bookingUser = booking.users;
@@ -379,13 +378,7 @@ export async function cancelBooking(
     });
   }
 
-  const orgSlug = booking.organizations?.slug;
-  if (orgSlug) {
-    revalidatePath(`/o/${orgSlug}/bookings`);
-    revalidatePath(`/o/${orgSlug}/bookings/${bookingId}`);
-  }
-  revalidatePath("/bookings");
-  revalidatePath(`/bookings/${bookingId}`);
+  revalidatePath("/", "layout");
 
   return { success: true };
 }

@@ -3,6 +3,7 @@ import { getOrgBySlug } from "@/lib/org-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { formatInTimeZone } from "date-fns-tz";
+import { formatCurrency } from "@/lib/utils";
 
 interface AdminDashboardPageProps {
   params: Promise<{ slug: string }>;
@@ -148,7 +149,7 @@ export default async function AdminDashboardPage({
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">
-              ${(stats.totalRevenue / 100).toFixed(2)}
+              {formatCurrency(stats.totalRevenue, org.currency)}
             </p>
           </CardContent>
         </Card>
