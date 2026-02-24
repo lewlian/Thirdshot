@@ -1,4 +1,5 @@
 import { getOrgBySlug } from "@/lib/org-context";
+import { getUser } from "@/lib/supabase/server";
 import Link from "next/link";
 
 export default async function PublicLayout({
@@ -10,6 +11,7 @@ export default async function PublicLayout({
 }) {
   const { slug } = await params;
   const org = await getOrgBySlug(slug);
+  const user = await getUser();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -37,18 +39,37 @@ export default async function PublicLayout({
               </span>
             </Link>
             <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="text-sm text-gray-600 hover:text-gray-900"
-              >
-                Sign in
-              </Link>
-              <Link
-                href={`/o/${slug}/join`}
-                className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800"
-              >
-                Join
-              </Link>
+              {user ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href={`/o/${slug}/join`}
+                    className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800"
+                  >
+                    Join Club
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href={`/login?redirect=/o/${slug}/join`}
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                    href={`/o/${slug}/join`}
+                    className="text-sm font-medium bg-gray-900 text-white px-4 py-2 rounded-full hover:bg-gray-800"
+                  >
+                    Join
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

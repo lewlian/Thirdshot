@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { getOrgBySlug } from "@/lib/org-context";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getUser, createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check } from "lucide-react";
+import { Check, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
 interface JoinPageProps {
@@ -12,8 +14,47 @@ export default async function JoinPage({ params }: JoinPageProps) {
   const { slug } = await params;
   const org = await getOrgBySlug(slug);
 
-  // Get membership tiers
   const supabase = await createServerSupabaseClient();
+  const user = await getUser();
+
+  // If logged in, try to auto-join
+  if (user) {
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("supabase_id", user.id)
+      .single();
+
+    if (dbUser) {
+      const adminClient = createAdminSupabaseClient();
+
+      // Check if already a member
+      const { data: existing } = await adminClient
+        .from("organization_members")
+        .select("id")
+        .eq("organization_id", org.id)
+        .eq("user_id", dbUser.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Already a member — go straight to courts
+        redirect(`/o/${slug}/courts`);
+      }
+
+      // Auto-join as member
+      await adminClient.from("organization_members").insert({
+        id: crypto.randomUUID(),
+        organization_id: org.id,
+        user_id: dbUser.id,
+        role: "member",
+        membership_status: "active",
+      });
+
+      redirect(`/o/${slug}/courts`);
+    }
+  }
+
+  // Not logged in — show sign up / sign in page
   const { data: tiers } = await supabase
     .from("membership_tiers")
     .select("*")
@@ -97,7 +138,7 @@ export default async function JoinPage({ params }: JoinPageProps) {
                   </ul>
 
                   <Link
-                    href={`/signup?redirect=/o/${slug}/courts`}
+                    href={`/signup?redirect=/o/${slug}/join`}
                     className="block w-full text-center py-3 rounded-full bg-gray-900 text-white hover:bg-gray-800 font-medium text-sm"
                   >
                     Sign Up
@@ -114,7 +155,7 @@ export default async function JoinPage({ params }: JoinPageProps) {
               Sign up to join {org.name} and start booking courts.
             </p>
             <Link
-              href={`/signup?redirect=/o/${slug}/courts`}
+              href={`/signup?redirect=/o/${slug}/join`}
               className="inline-block px-8 py-3 rounded-full bg-gray-900 text-white hover:bg-gray-800 font-medium"
             >
               Sign Up
@@ -125,7 +166,7 @@ export default async function JoinPage({ params }: JoinPageProps) {
 
       <p className="text-center text-sm text-gray-500">
         Already have an account?{" "}
-        <Link href="/login" className="text-gray-700 underline">
+        <Link href={`/login?redirect=/o/${slug}/join`} className="text-gray-700 underline">
           Sign in
         </Link>
       </p>
