@@ -1,40 +1,93 @@
-# PickleSG - Pickleball Court Booking Platform
+# Thirdshot - Pickleball Court Booking Platform
 
-A modern, mobile-first Progressive Web App for booking pickleball courts in Singapore with seamless PayNow integration.
+A modern, multi-tenant SaaS platform for pickleball clubs to manage court bookings, memberships, and payments. Built with Next.js 16 and designed mobile-first.
 
 ![Status](https://img.shields.io/badge/status-pre--production-yellow)
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 
----
-
-## Table of Contents
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
+**Live:** [thirdshot-booking.vercel.app](https://thirdshot-booking.vercel.app)
 
 ---
 
 ## Features
 
-### Core Features ✅
-- **Real-time Court Booking** - 7-day advance booking window with live availability
-- **Calendar View** - Aggregated availability across all courts with countdown timers
-- **PayNow Integration** - Seamless payments via HitPay with QR codes
-- **User Authentication** - Email/password and Google OAuth via Supabase
-- **Mobile-First PWA** - Installable app with offline support
-- **Admin Dashboard** - Complete court and booking management
-- **Email Notifications** - Automated confirmations via Resend
-- **Singapore Timezone** - All operations in SGT (Asia/Singapore)
+### Multi-Tenant Organization System
+- Clubs operate under their own URL slug (`/o/your-club/...`)
+- Per-org settings: timezone, currency, operating hours, branding
+- Public club landing page with hero image, about, courts, and membership tiers
+- Organization discovery dashboard for users who belong to multiple clubs
+- Super admin role for platform-level management (creating new orgs)
 
-See [FEATURES.md](./FEATURES.md) for complete feature list.
+### Court Management
+- Create, edit, deactivate, and delete courts
+- Per-court pricing with peak/off-peak rates (weekends + weekday evenings)
+- Configurable slot durations (15-120 min) and operating hours
+- Court blocks for maintenance, tournaments, and private events with conflict detection
+
+### Booking System
+- Real-time availability with calendar view
+- Multi-slot consecutive booking (configurable max 1-8 slots)
+- Configurable advance booking window (1-90 days)
+- Daily booking limits per user
+- Booking lifecycle: pending payment, confirmed, cancelled, expired, completed, no-show
+- Add-to-calendar (.ics) generation for Google Calendar, Outlook, Apple Calendar
+- Rate limiting on booking attempts
+
+### Recurring Bookings (Admin)
+- Create weekly recurring bookings on a specific day
+- Auto-generates individual bookings across a date range
+- Conflict detection: skips dates with existing bookings
+- Cancel entire series or individual occurrences
+
+### Payment Integration (HitPay)
+- HitPay gateway with PayNow QR code support
+- Configurable payment timeout (5-60 min) with countdown timer
+- Saved payment methods for one-click checkout
+- Webhook-driven payment confirmation with HMAC signature verification
+- Automatic booking expiration on timeout
+
+### Member Management
+- Role hierarchy: owner > admin > staff > member > guest
+- Custom membership tiers with pricing (monthly, quarterly, yearly)
+- Invite members by email with auto-join flow
+- Suspend, activate, and remove members
+- Member directory with search, filtering, and pagination
+- Tier assignment and role management
+
+### Liability Waivers
+- Admin-configurable waiver content with versioning
+- Members must sign the active waiver before gaining full access
+- Signature tracking with timestamps
+
+### Public Pages
+- Club landing page with hero, description, courts, pricing, and membership tiers
+- Public booking page for guest bookings (when enabled by org)
+- Public join page for new member signup with tier selection
+
+### Email Notifications (Resend)
+- Booking confirmation and cancellation emails
+- Payment receipts
+- Booking reminders (24 hours before, via cron)
+- Email verification and password reset flows
+
+### Admin Dashboard
+- Quick stats: total members, new members, revenue, bookings
+- Weekly calendar view with color-coded bookings and blocks
+- Booking management with status filtering and admin cancellation
+- Finance overview with revenue summaries by period (7d, 30d, 90d, YTD)
+- Audit log tracking all admin actions with before/after data
+- Organization settings and branding configuration
+
+### Authentication & Security
+- Email/password signup with email verification
+- Google OAuth single sign-on
+- Password reset flow
+- Row-Level Security (RLS) on all tenant tables (24 policies)
+- Role-based access control enforced at DB and server action level
+- Rate limiting on login, signup, and booking endpoints
+- HMAC webhook signature verification
+- Middleware-protected routes
 
 ---
 
@@ -42,442 +95,208 @@ See [FEATURES.md](./FEATURES.md) for complete feature list.
 
 | Category | Technology |
 |----------|-----------|
-| Framework | [Next.js 16](https://nextjs.org) (App Router) |
+| Framework | [Next.js 16](https://nextjs.org) (App Router, Server Components) |
 | Language | [TypeScript](https://www.typescriptlang.org) |
-| Database | PostgreSQL ([Neon](https://neon.tech)) |
-| ORM | [Prisma](https://www.prisma.io) |
-| Auth | [Supabase Auth](https://supabase.com/auth) |
-| Payment | [HitPay](https://www.hitpayapp.com) (PayNow) |
-| Email | [Resend](https://resend.com) + [React Email](https://react.email) |
-| UI Components | [shadcn/ui](https://ui.shadcn.com) |
+| Database | [Supabase](https://supabase.com) (PostgreSQL with RLS) |
+| Auth | [Supabase Auth](https://supabase.com/auth) (SSR v0.8) |
+| Payments | [HitPay](https://www.hitpayapp.com) (PayNow, card, saved cards) |
+| Email | [Resend](https://resend.com) |
+| UI | [shadcn/ui](https://ui.shadcn.com) + [Radix UI](https://radix-ui.com) |
 | Styling | [Tailwind CSS](https://tailwindcss.com) |
+| Forms | [React Hook Form](https://react-hook-form.com) + [Zod](https://zod.dev) |
 | Deployment | [Vercel](https://vercel.com) |
+| Testing | [Jest](https://jestjs.io) + React Testing Library |
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+ and npm
-- PostgreSQL database (or Neon serverless)
-- Supabase account
+- Node.js 18+
+- Supabase project (database + auth)
 - HitPay account (sandbox for development)
 - Resend account (for email)
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd pickleball-app
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/lewlian/Thirdshot.git
+cd Thirdshot
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+# Install dependencies
+npm install
 
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   Fill in all required environment variables (see [Environment Variables](#environment-variables)).
+# Set up environment variables
+cp .env.example .env
+# Fill in all required values (see Environment Variables below)
 
-4. **Set up database**
-   ```bash
-   # Run migrations
-   npx prisma migrate dev
+# Start development server
+npm run dev
+```
 
-   # Seed initial data
-   npx prisma db seed
-   ```
-
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-6. **Open in browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Create a `.env` file from `.env.example`:
 
-### Database
 ```env
-DATABASE_URL="postgresql://user:password@host:5432/database?sslmode=require"
-DIRECT_URL="postgresql://user:password@host:5432/database?sslmode=require"
-```
-
-### Supabase (Authentication)
-```env
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
 SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-```
 
-### HitPay (Payments)
-```env
+# Database (Supabase PostgreSQL)
+DATABASE_URL="postgresql://postgres:password@db.your-project.supabase.co:5432/postgres?pgbouncer=true"
+DIRECT_URL="postgresql://postgres:password@db.your-project.supabase.co:5432/postgres"
+
+# HitPay Payments
 HITPAY_API_KEY="your-api-key"
-HITPAY_SALT="your-salt"
-NEXT_PUBLIC_HITPAY_BASE_URL="https://api.sandbox.hit-pay.com/v1"  # Use production URL for prod
-```
+HITPAY_SALT="your-webhook-salt"
+NEXT_PUBLIC_HITPAY_BASE_URL="https://api.sandbox.hit-pay.com/v1"
 
-### Resend (Email)
-```env
+# Resend Email
 RESEND_API_KEY="re_your-api-key"
-RESEND_FROM_EMAIL="noreply@yourdomain.com"
-```
+FROM_EMAIL="bookings@yourdomain.com"
 
-### App Configuration
-```env
-NEXT_PUBLIC_APP_URL="http://localhost:3000"  # Your app URL
-```
-
-See `.env.example` for a complete template.
-
----
-
-## Development
-
-### Project Structure
-
-```
-pickleball-app/
-├── prisma/
-│   ├── schema.prisma          # Database schema
-│   └── seed.ts                # Database seeding
-├── public/                    # Static assets
-├── scripts/                   # Utility scripts
-├── src/
-│   ├── app/                   # Next.js app directory
-│   │   ├── (auth)/           # Auth pages (login, signup)
-│   │   ├── (main)/           # Main app pages
-│   │   ├── admin/            # Admin dashboard
-│   │   ├── api/              # API routes
-│   │   ├── bookings/         # Booking pages
-│   │   └── courts/           # Court pages
-│   ├── components/           # React components
-│   │   ├── booking/          # Booking-related components
-│   │   ├── layout/           # Layout components
-│   │   └── ui/               # shadcn/ui components
-│   └── lib/                  # Utility libraries
-│       ├── actions/          # Server actions
-│       ├── booking/          # Booking logic
-│       ├── email/            # Email templates
-│       ├── hitpay/           # Payment integration
-│       └── supabase/         # Auth helpers
-├── FEATURES.md               # Feature documentation
-├── PRD.md                    # Product requirements
-└── README.md                 # This file
-```
-
-### Key Commands
-
-```bash
-# Development
-npm run dev              # Start dev server
-npm run build            # Build for production
-npm run start            # Start production server
-npm run lint             # Run ESLint
-
-# Database
-npx prisma studio        # Open Prisma Studio (DB GUI)
-npx prisma migrate dev   # Run migrations
-npx prisma generate      # Generate Prisma Client
-npx prisma db seed       # Seed database
-
-# Type checking
-npm run type-check       # Run TypeScript compiler
-```
-
-### Database Migrations
-
-When you make schema changes:
-
-```bash
-# Create a new migration
-npx prisma migrate dev --name your_migration_name
-
-# Apply migrations in production
-npx prisma migrate deploy
-```
-
-### Debugging
-
-Run test scripts to verify functionality:
-
-```bash
-# Check booking window setting
-npx tsx scripts/test/check-booking-window.ts
-
-# Test countdown timer logic
-npx tsx scripts/test/test-countdown-fixed.ts
+# App
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+CRON_SECRET="your-secure-cron-secret"
 ```
 
 ---
 
-## Testing
+## Project Structure
 
-The application has comprehensive test coverage using Jest and React Testing Library.
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage report
-npm run test:coverage
+```
+src/
+├── app/
+│   ├── (auth)/              # Login, signup, verify-email, password reset
+│   ├── (platform)/          # Dashboard, create-org (platform-level)
+│   ├── (main)/              # Legacy routes (redirect to /dashboard)
+│   ├── o/[slug]/            # Organization-scoped routes
+│   │   ├── (public)/        #   Public: landing page, join, book
+│   │   ├── (member)/        #   Member: courts, bookings, profile, waiver
+│   │   └── (admin)/         #   Admin: dashboard, courts, bookings, members,
+│   │                        #          calendar, finance, settings, audit-log
+│   └── api/                 # API routes, webhooks, cron jobs
+├── components/
+│   ├── booking/             # Booking flow components
+│   ├── layout/              # Navigation, headers, footers
+│   ├── admin/               # Admin-specific components
+│   └── ui/                  # shadcn/ui primitives
+└── lib/
+    ├── actions/             # Server actions (booking, court, member, org, etc.)
+    ├── email/               # Email templates and sending
+    ├── hitpay/              # Payment gateway integration
+    └── supabase/            # Auth helpers, client creation
 ```
 
-### Test Coverage
+---
 
-- **Unit Tests**: Business logic, utilities, and validation
-- **Integration Tests**: Component interactions and API routes
-- **Edge Cases**: Error handling, boundary conditions, and edge scenarios
+## Key Commands
 
-Current test coverage:
-- Slot availability checking
-- Pricing calculations (peak/off-peak)
-- Date/time handling and timezone conversions
-- Booking validation
-- Payment expiration logic
-- Component rendering and user interactions
-- Error handling scenarios
+```bash
+npm run dev            # Start dev server
+npm run build          # Production build
+npm run lint           # Run ESLint
+npm test               # Run tests
+npm run test:watch     # Tests in watch mode
+npm run test:coverage  # Tests with coverage report
+```
 
-See [TESTING.md](./TESTING.md) for complete testing documentation.
+---
+
+## Key Concepts
+
+### Multi-Tenancy
+Each organization operates under `/o/[slug]/`. Organization context is resolved via `getOrgBySlug()` with React `cache()` on the server, and `OrgProvider` + `useOrg()` on the client. All database tables include `organization_id` with RLS policies enforcing tenant isolation.
+
+### Booking Flow
+1. User selects court, date, and time slots
+2. Booking created with `PENDING_PAYMENT` status (atomic RPC)
+3. User redirected to payment page with countdown timer
+4. On payment success: HitPay webhook confirms booking
+5. On timeout: booking auto-expires, slots released
+
+### Role Hierarchy
+Roles are numeric: owner (100) > admin (80) > staff (60) > member (40) > guest (20). Permission checks use `requireOrgRole()` server-side and RLS policies at the database level.
+
+### Pricing
+Courts have a base price per hour. Peak pricing applies automatically during weekends and weekday evenings (18:00-21:00). Prices are stored in the organization's configured currency.
 
 ---
 
 ## Deployment
 
-### Deploying to Vercel
+Deployed on Vercel with automatic deployments from the `main` branch.
 
-1. **Push to GitHub**
-   ```bash
-   git push origin main
-   ```
-
-2. **Import to Vercel**
-   - Go to [vercel.com](https://vercel.com)
-   - Click "New Project"
-   - Import your repository
-   - Configure environment variables
-   - Deploy
-
-3. **Set up cron jobs**
-
-   Create `vercel.json` in root:
-   ```json
-   {
-     "crons": [
-       {
-         "path": "/api/cron/expire-bookings",
-         "schedule": "*/5 * * * *"
-       }
-     ]
-   }
-   ```
-
-4. **Configure custom domain** (optional)
-   - Add domain in Vercel dashboard
-   - Update DNS records
-   - Update `NEXT_PUBLIC_APP_URL`
-
-### Production Checklist
-
-Before going to production:
-
-- [ ] Switch HitPay to production API
-- [ ] Set up production database backups
-- [ ] Configure error monitoring (Sentry)
-- [ ] Enable Vercel Analytics
-- [ ] Test payment flow end-to-end
-- [ ] Verify email deliverability
-- [ ] Set up SSL/HTTPS
-- [ ] Run security audit
-- [ ] Load testing for booking system
-- [ ] Create runbook for operations
-
-See [PRD.md](./PRD.md) for detailed production deployment task list.
+### Cron Jobs (via `vercel.json`)
+- **Expire bookings** (`/api/cron/expire-bookings`) - expires unpaid bookings past timeout
+- **Send reminders** (`/api/cron/send-reminders`) - sends reminder emails 24h before booking
 
 ---
 
-## Documentation
+## API Endpoints
 
-- **[FEATURES.md](./FEATURES.md)** - Complete list of implemented features
-- **[TESTING.md](./TESTING.md)** - Testing guide and test coverage
-- **[PRD.md](./PRD.md)** - Product requirements and future roadmap
-- **Implementation Plan** - Detailed technical plan at `/Users/sean/.claude/plans/linear-coalescing-brooks.md`
-
-### Key Concepts
-
-#### Booking Window
-- Users can book up to 7 days in advance
-- Booking for day X opens at midnight SGT on day X-7
-- Example: Booking for Jan 23 opens on Jan 16 at 00:00 SGT
-
-#### Payment Flow
-1. User selects court and time slots
-2. Booking created with `PENDING` status
-3. User redirected to payment page (PayNow QR)
-4. 10-minute timeout starts
-5. On payment success: webhook updates status to `CONFIRMED`
-6. On timeout: booking cancelled, slots released
-
-#### Timezone Handling
-- All dates stored in UTC in database
-- All calculations use Singapore timezone (Asia/Singapore, UTC+8)
-- `date-fns-tz` library used for conversions
-
----
-
-## API Documentation
-
-### Webhooks
-
-#### HitPay Payment Webhook
-**Endpoint:** `POST /api/webhooks/hitpay`
-
-Handles payment confirmations from HitPay.
-
-**Security:** HMAC signature verification with salt
-
-**Events:**
-- `completed` - Payment successful, booking confirmed
-- `failed` - Payment failed, booking cancelled
-
----
-
-## Contributing
-
-### Adding New Features
-
-1. Check [PRD.md](./PRD.md) for planned features
-2. Copy the relevant task list from PRD
-3. Share with Claude for implementation
-4. Test thoroughly
-5. Update [FEATURES.md](./FEATURES.md) when complete
-
-### Reporting Issues
-
-- Describe the bug or issue clearly
-- Include steps to reproduce
-- Provide browser/device information
-- Include error messages or screenshots
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/webhooks/hitpay` | Payment confirmation webhook |
+| `POST /api/webhooks/hitpay/recurring` | Recurring/saved card payment webhook |
+| `GET /api/courts/[courtId]/availability` | Slot availability for a court |
+| `GET /api/bookings/[bookingId]/ical` | Generate .ics calendar file |
+| `POST /api/auth/callback` | OAuth callback handler |
+| `POST /api/auth/forgot-password` | Initiate password reset |
+| `POST /api/auth/reset-password` | Complete password reset |
+| `POST /api/create-org` | Create new organization (super admin) |
+| `GET /api/cron/expire-bookings` | Expire stale pending bookings |
+| `GET /api/cron/send-reminders` | Send booking reminder emails |
 
 ---
 
 ## Testing
 
-### Manual Testing
+```bash
+npm test               # Run all tests
+npm run test:coverage  # With coverage report
+```
 
-Run through these critical flows:
+Coverage includes:
+- Slot availability and pricing calculations
+- Date/time handling and timezone conversions
+- Booking validation and payment expiration logic
+- Component rendering and user interactions
 
-1. **User Registration & Login**
-   - Sign up with email
-   - Sign up with Google OAuth
-   - Log in with email
-   - Log in with Google
-
-2. **Booking Flow**
-   - Browse courts
-   - Select date and time
-   - Select multiple consecutive slots
-   - Complete payment
-   - Receive confirmation email
-
-3. **Admin Operations**
-   - Create/edit court
-   - Block court for maintenance
-   - View all bookings
-   - Cancel booking
-
-4. **Mobile Experience**
-   - Test on actual mobile device
-   - Install as PWA
-   - Test offline functionality
-
-### Automated Tests (Planned)
-
-See [PRD.md](./PRD.md#1-automated-testing-suite) for testing roadmap.
+See [TESTING.md](./TESTING.md) for full testing documentation.
 
 ---
 
 ## Security
 
-### Best Practices Implemented
-
-- ✅ Server-side auth validation
-- ✅ Protected API routes with middleware
-- ✅ HMAC signature verification for webhooks
-- ✅ SQL injection prevention via Prisma
-- ✅ XSS prevention via React
-- ✅ CSRF protection via SameSite cookies
-- ✅ Environment variables for secrets
-- ✅ Role-based access control (admin)
-
-### Reporting Security Issues
-
-Please email security issues to: [your-email]
+- Row-Level Security (RLS) on all 11 tenant tables with 24 policies
+- Server-side auth validation on all protected routes
+- HMAC signature verification for payment webhooks
+- Rate limiting on auth and booking endpoints
+- Role-based access control (owner/admin/staff/member/guest)
+- Environment variables for all secrets
+- XSS prevention via React, injection prevention via parameterized queries
 
 ---
 
-## Performance
+## Documentation
 
-### Current Optimizations
-
-- Server Components for reduced client-side JS
-- Dynamic imports for code splitting
-- Image optimization with Next.js Image
-- Database connection pooling with Prisma
-
-### Planned Optimizations
-
-See [PRD.md - Performance Improvements](./PRD.md#performance-improvements)
-
----
-
-## Browser Support
-
-- Chrome/Edge (latest 2 versions)
-- Firefox (latest 2 versions)
-- Safari (latest 2 versions)
-- Mobile Safari (iOS 14+)
-- Chrome Mobile (Android 10+)
+- [FEATURES.md](./FEATURES.md) - Detailed feature documentation
+- [TESTING.md](./TESTING.md) - Testing guide and coverage
 
 ---
 
 ## License
 
-[Your License Here - e.g., MIT]
+MIT
 
 ---
 
-## Contact & Support
-
-- **Email:** [your-email]
-- **Website:** [your-website]
-- **Issues:** [GitHub Issues URL]
-
----
-
-## Acknowledgments
-
-- [Next.js](https://nextjs.org) for the amazing framework
-- [shadcn/ui](https://ui.shadcn.com) for beautiful components
-- [Prisma](https://www.prisma.io) for excellent database tooling
-- [Supabase](https://supabase.com) for auth infrastructure
-- [HitPay](https://www.hitpayapp.com) for payment processing
-- [Vercel](https://vercel.com) for hosting
-
----
-
-**Made with ❤️ for the Pickleball community in Singapore**
+**Built for the pickleball community**
