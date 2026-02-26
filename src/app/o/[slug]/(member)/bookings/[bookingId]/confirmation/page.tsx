@@ -219,9 +219,6 @@ export default async function ConfirmationPage({
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Auto-refresh component when payment is pending */}
-      <ConfirmationClient isPending={isPending} isFailed={isFailed} bookingId={bookingId} />
-
       {/* Header Section with conditional gradient */}
       {isConfirmed && (
         <div className="gradient-blue-bg text-white px-4 sm:px-6 lg:px-8 pt-8 pb-12">
@@ -250,8 +247,9 @@ export default async function ConfirmationPage({
                     Checking Payment Status...
                   </CardTitle>
                   <CardDescription className="text-base mt-2">
-                    We're verifying your payment with HitPay. This usually takes a few moments.
+                    We&apos;re verifying your payment with HitPay. This usually takes a few moments.
                   </CardDescription>
+                  <ConfirmationClient isPending={isPending} isFailed={isFailed} bookingId={bookingId} />
                 </>
               ) : isFailed ? (
                 <>
