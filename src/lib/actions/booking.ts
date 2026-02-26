@@ -341,6 +341,13 @@ export async function cancelBooking(
   const wasConfirmed = booking.status === "CONFIRMED";
 
   const adminClient = createAdminSupabaseClient();
+
+  // Delete booking slots to release the unique constraint on (court_id, start_time)
+  await adminClient
+    .from('booking_slots')
+    .delete()
+    .eq('booking_id', bookingId);
+
   await adminClient
     .from('bookings')
     .update({

@@ -166,6 +166,10 @@ BEGIN
     RETURN jsonb_build_object('expired_count', 0, 'booking_ids', '[]'::jsonb);
   END IF;
 
+  -- Delete booking slots for expired bookings (release the unique constraint)
+  DELETE FROM booking_slots
+  WHERE booking_id = ANY(v_expired_ids);
+
   -- Expire bookings
   UPDATE bookings
   SET status = 'EXPIRED',

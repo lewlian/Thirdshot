@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { getAdminUser } from "@/lib/auth/admin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -348,19 +349,31 @@ export async function adminCancelBooking(bookingId: string, reason?: string, org
 
   try {
     const supabase = await createServerSupabaseClient();
+    const adminClient = createAdminSupabaseClient();
 
+    // Fetch booking data before deleting slots (needed for audit log)
     const { data: booking, error } = await supabase
+      .from('bookings')
+      .select('*, users(*), booking_slots(*, courts(*))')
+      .eq('id', bookingId)
+      .single();
+
+    if (error) throw error;
+
+    // Delete booking slots to release the unique constraint on (court_id, start_time)
+    await adminClient
+      .from('booking_slots')
+      .delete()
+      .eq('booking_id', bookingId);
+
+    await adminClient
       .from('bookings')
       .update({
         status: "CANCELLED",
         cancelled_at: new Date().toISOString(),
         cancel_reason: reason,
       })
-      .eq('id', bookingId)
-      .select('*, users(*), booking_slots(*, courts(*))')
-      .single();
-
-    if (error) throw error;
+      .eq('id', bookingId);
 
     const resolvedOrgId = orgId || booking.organization_id;
     await createAuditLog(admin.id, resolvedOrgId, "CANCEL", "Booking", bookingId, {

@@ -1,6 +1,7 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { requireOrgRole } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -271,7 +272,14 @@ export async function cancelRecurringBooking(orgId: string, recurringBookingId: 
           (s: { start_time: string }) => s.start_time > now
         );
         if (isFuture) {
-          await supabase
+          const adminClient = createAdminSupabaseClient();
+          // Delete booking slots to release unique constraint
+          await adminClient
+            .from("booking_slots")
+            .delete()
+            .eq("booking_id", booking.id);
+
+          await adminClient
             .from("bookings")
             .update({
               status: "CANCELLED",
